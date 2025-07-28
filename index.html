@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Map Generator</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="controls">
+        <div id="controls-header" onclick="toggleControls()">
+            <h2>Map Controls</h2>
+            <button id="minimizeButton">-</button>
+        </div>
+        <div id="controls-content">
+            <div class="control-group">
+                <label for="seedInput">Seed:</label>
+                <input type="text" id="seedInput" placeholder="Leave blank for random">
+            </div>
+            <button id="generateButton" onclick="generateAndRenderWorld()">Generate New World</button>
+            
+            <h3>Map Modes</h3>
+            <div class="map-modes">
+                <button id="physicalButton" onclick="setMapMode('physical')">Physical</button>
+                <button id="politicalButton" onclick="setMapMode('political')" class="active">Political</button>
+                <button id="developmentButton" onclick="setMapMode('development')">Development</button>
+                <button id="cultureButton" onclick="setMapMode('culture')">Culture</button>
+                <button id="religionButton" onclick="setMapMode('religion')">Religion</button>
+                <button id="diplomaticButton" onclick="setMapMode('diplomatic')">Diplomatic</button>
+            </div>
+    
+            <div id="loadingStatus">Ready.</div>
+            <div id="tileInfo">Click to focus on a nation, province, or county.</div>
+        </div>
+    </div>
+    
+    <canvas id="map" width="1200" height="1200"></canvas>
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+body { 
+    margin: 0; 
+    background: #1a1a1a; 
+    color: #e0e0e0; 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    box-sizing: border-box;
+    height: 100vh;
+    overflow: hidden;
+}
+canvas { 
+    display: block; 
+    background: #000; 
+    image-rendering: pixelated;
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    max-width: calc(100vw - 350px);
+    max-height: calc(100vh - 30px);
+    aspect-ratio: 1 / 1;
+    cursor: pointer;
+}
+#controls {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    background: rgba(40, 40, 40, 0.9);
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    z-index: 10;
+    max-width: 300px;
+    transition: padding 0.3s ease-in-out;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+#controls-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+#controls h2 {
+    margin: 0;
+    font-size: 1.2em;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+#controls-content {
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: 100%;
+    transition: max-height 0.3s ease-in-out, margin-top 0.3s ease-in-out, opacity 0.3s;
+    margin-top: 15px;
+}
+#controls-content::-webkit-scrollbar {
+    width: 8px;
+}
+#controls-content::-webkit-scrollbar-track {
+    background: #2c2c2c;
+    border-radius: 4px;
+}
+#controls-content::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+#controls-content::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}
+#controls.minimized {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+#controls.minimized #controls-content {
+    max-height: 0;
+    margin-top: 0 !important;
+    opacity: 0;
+}
+#minimizeButton {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 1.2em;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-left: 10px;
+}
+#controls h3 {
+    font-size: 1em;
+    margin-top: 15px;
+    margin-bottom: 10px;
+     border-bottom: 1px solid #555;
+    padding-bottom: 5px;
+}
+.control-group {
+    margin-bottom: 10px;
+}
+.map-modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+}
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+}
+input[type="text"], input[type="number"] {
+    width: calc(100% - 10px);
+    padding: 5px;
+    background: #333;
+    border: 1px solid #555;
+    color: #e0e0e0;
+    border-radius: 4px;
+}
+button {
+    width: 100%;
+    padding: 10px;
+    background: #4a90e2;
+    border: none;
+    color: #fff;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+button:hover {
+    background: #357abd;
+}
+button.active {
+    background: #2a6a9e;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+}
+#tileInfo, #loadingStatus {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid #555;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+#tileInfo b {
+    color: #4a90e2;
+}
