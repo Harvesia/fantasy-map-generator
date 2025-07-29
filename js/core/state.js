@@ -34,7 +34,25 @@ generationWorker.onmessage = (e) => {
     if (type === 'progress') {
         loadingStatus.textContent = payload.status;
     } else if (type === 'complete') {
+        // Reconstruct the world object from the cloned arrays
         world = payload.world;
+        world.nations = new Map(world.nations);
+        world.provinces = new Map(world.provinces);
+        world.counties = new Map(world.counties);
+    
+        world.nations.forEach(nation => {
+            nation.allies = new Set(nation.allies);
+            nation.vassals = new Set(nation.vassals);
+            nation.atWarWith = new Set(nation.atWarWith);
+            nation.children = new Set(nation.children);
+        });
+        world.provinces.forEach(province => {
+            province.children = new Set(province.children);
+        });
+        world.counties.forEach(county => {
+            county.tiles = new Set(county.tiles);
+        });
+    
         loadingStatus.textContent = "Creating render layers...";
         setTimeout(() => {
             createRenderLayers(); // Create offscreen canvases for performance

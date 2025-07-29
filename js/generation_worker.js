@@ -947,6 +947,24 @@ self.onmessage = (e) => {
         post("14. Coloring Nations...");
         colorNations(rand);
 
+        // Convert Maps and Sets to Arrays for safe cloning
+        world.nations = Array.from(world.nations.entries());
+        world.provinces = Array.from(world.provinces.entries());
+        world.counties = Array.from(world.counties.entries());
+
+        world.nations.forEach(([id, nation]) => {
+            nation.allies = Array.from(nation.allies);
+            nation.vassals = Array.from(nation.vassals);
+            nation.atWarWith = Array.from(nation.atWarWith);
+            nation.children = Array.from(nation.children);
+        });
+        world.provinces.forEach(([id, province]) => {
+            province.children = Array.from(province.children);
+        });
+        world.counties.forEach(([id, county]) => {
+            county.tiles = Array.from(county.tiles);
+        });
+
         self.postMessage({ type: 'complete', payload: { world } });
     }
 };
