@@ -54,14 +54,12 @@ generationWorker.onmessage = (e) => {
         });
     
         loadingStatus.textContent = "Creating render layers...";
-        setTimeout(() => {
-            createRenderLayers(); // Create offscreen canvases for performance
-            fitMapToScreen();
-            setMapMode('political'); // Set initial map mode and render
-            loadingStatus.textContent = "Generation Complete!";
-            generateButton.disabled = false;
-            updateTileInfo(Math.floor(GRID_WIDTH / 2), Math.floor(GRID_HEIGHT / 2));
-        }, 20);
+        createRenderLayers();
+        fitMapToScreen();
+        setMapMode('political');
+        loadingStatus.textContent = "Generation Complete!";
+        generateButton.disabled = false;
+        updateTileInfo(Math.floor(GRID_WIDTH / 2), Math.floor(GRID_HEIGHT / 2));
     }
 };
 
