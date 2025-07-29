@@ -3,24 +3,14 @@ body {
     background: #1a1a1a; 
     color: #e0e0e0; 
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 15px;
-    box-sizing: border-box;
-    height: 100vh;
     overflow: hidden;
 }
 canvas { 
     display: block; 
     background: #000; 
     image-rendering: pixelated;
-    border-radius: 8px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-    max-width: calc(100vw - 350px);
-    max-height: calc(100vh - 30px);
-    aspect-ratio: 1 / 1;
+    width: 100vw;
+    height: 100vh;
     cursor: pointer;
 }
 #controls {

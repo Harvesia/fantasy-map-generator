@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fantasy Map Generator</title>
     <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
+</head><body>
     <div id="controls">
         <div id="controls-header" onclick="toggleControls()">
             <h2>Map Controls</h2>
@@ -14,19 +13,20 @@
         </div>
         <div id="controls-content">
             <div class="control-group">
-                <label for="seedInput">Seed:</label>
+                <p style="margin-bottom: 5px;">Current Seed: <b id="currentSeedDisplay" style="color: #4a90e2;">-</b></p>
+                <label for="seedInput">Use Specific Seed (Optional):</label>
                 <input type="text" id="seedInput" placeholder="Leave blank for random">
             </div>
-            <button id="generateButton" onclick="generateAndRenderWorld()">Generate New World</button>
+            <button id="generateButton">Generate New World</button>
             
             <h3>Map Modes</h3>
             <div class="map-modes">
-                <button id="physicalButton" onclick="setMapMode('physical')">Physical</button>
-                <button id="politicalButton" onclick="setMapMode('political')" class="active">Political</button>
-                <button id="developmentButton" onclick="setMapMode('development')">Development</button>
-                <button id="cultureButton" onclick="setMapMode('culture')">Culture</button>
-                <button id="religionButton" onclick="setMapMode('religion')">Religion</button>
-                <button id="diplomaticButton" onclick="setMapMode('diplomatic')">Diplomatic</button>
+                <button id="physicalButton" class="active">Physical</button>
+                <button id="politicalButton">Political</button>
+                <button id="developmentButton">Development</button>
+                <button id="cultureButton">Culture</button>
+                <button id="religionButton">Religion</button>
+                <button id="diplomaticButton">Diplomatic</button>
             </div>
     
             <div id="loadingStatus">Ready.</div>
@@ -34,7 +34,7 @@
         </div>
     </div>
     
-    <canvas id="map" width="1200" height="1200"></canvas>
-    <script src="js/main.js"></script>
+    <canvas id="map"></canvas>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>

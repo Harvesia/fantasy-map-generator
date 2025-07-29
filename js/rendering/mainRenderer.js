@@ -1,0 +1,135 @@
+/*The main rendering engine. Handles the animation loop, drawing layers
+from offscreen canvases, and managing map modes*/
+
+import { viewport, world, selection } from '../core/state.js';
+import * as Config from '../core/config.js';
+import { renderPoliticalMode, renderDevelopmentMode, renderCultureMode, renderReligionMode, renderDiplomaticMode } from './mapModes.js';
+import { renderFocusHighlight, renderSociologyHighlight, renderNationLabels, renderSociologyLabels, drawBorders, drawDiplomacyLines } from './overlays.js';
+
+const canvas = document.getElementById("map");
+const ctx = canvas.getContext("2d");
+
+let animationFrameId = null;
+export let currentMapMode = 'physical';
+
+// Offscreen canvases for performance
+export let renderLayers = {
+    terrain: null,
+    political: null,
+    development: null,
+    culture: null,
+    religion: null,
+    diplomatic: null
+};
+
+/* Creates the static, pre-rendered layers on offscreen canvases.
+This is a major optimization, as these layers don't need to be redrawn every frame.*/
+
+export function createRenderLayers() {
+    const width = Config.GRID_WIDTH * Config.TILE_SIZE;
+    const height = Config.GRID_HEIGHT * Config.TILE_SIZE;
+
+    // Terrain Layer (base layer)
+    renderLayers.terrain = new OffscreenCanvas(width, height);
+    const terrainCtx = renderLayers.terrain.getContext('2d');
+    for (const tile of world.tiles) {
+        terrainCtx.fillStyle = tile.biome.color;
+        terrainCtx.fillRect(tile.x * Config.TILE_SIZE, tile.y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+    }
+
+    // Map Mode Layers
+    renderLayers.political = renderPoliticalMode();
+    renderLayers.development = renderDevelopmentMode();
+    renderLayers.culture = renderCultureMode();
+    renderLayers.religion = renderReligionMode();
+}
+
+//Main render loop. Draws the appropriate layers to the main canvas.
+
+function renderMap() {
+    animationFrameId = null;
+    if (!world.tiles || world.tiles.length === 0) return;
+
+    // Resize canvas if needed
+    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        ctx.imageSmoothingEnabled = false;
+    }
+
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(viewport.zoom, viewport.zoom);
+    ctx.translate(-viewport.x, -viewport.y);
+
+    const viewLeft = viewport.x;
+    const viewTop = viewport.y;
+    const viewRight = viewport.x + canvas.width / viewport.zoom;
+    const viewBottom = viewport.y + canvas.height / viewport.zoom;
+
+    // Draw the base terrain layer
+    if (renderLayers.terrain) {
+        ctx.drawImage(renderLayers.terrain, 0, 0);
+    }
+
+    // Draw the current map mode layer or selection-based layer
+    if (selection.level === 0) { // No selection
+        if (currentMapMode !== 'physical' && renderLayers[currentMapMode]) {
+             ctx.drawImage(renderLayers[currentMapMode], 0, 0);
+        }
+    } else { 
+        // Always show political layer as base for selections
+        if (renderLayers.political) {
+            ctx.drawImage(renderLayers.political, 0, 0);
+        }
+        // Draw specific selection highlights on top
+        if (currentMapMode === 'diplomatic' && selection.nationId !== null) {
+            const diplomaticLayer = renderDiplomaticMode(selection.nationId);
+            ctx.drawImage(diplomaticLayer, 0, 0);
+        } else {
+            renderFocusHighlight(ctx);
+        }
+    }
+
+    // Draw dynamic overlays (highlights, borders, labels)
+    if (selection.cultureId !== null) {
+        renderSociologyHighlight(ctx, 'culture');
+    } else if (selection.religionId !== null) {
+        renderSociologyHighlight(ctx, 'religion');
+    }
+    
+    if (currentMapMode !== 'physical' || selection.level > 0) {
+        drawBorders(ctx);
+    }
+
+    if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || selection.level > 0) {
+        renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom);
+        if(currentMapMode === 'political' && selection.level === 0) drawDiplomacyLines(ctx);
+    }
+    if (currentMapMode === 'culture') {
+        renderSociologyLabels(ctx, 'culture');
+    }
+    if (currentMapMode === 'religion') {
+        renderSociologyLabels(ctx, 'religion');
+    }
+
+    ctx.restore();
+}
+
+//Requests a new frame to be rendered.
+
+export function requestRender() {
+    if (!animationFrameId) {
+        animationFrameId = requestAnimationFrame(renderMap);
+    }
+}
+
+/**Sets the current map mode and triggers a re-render
+@param {string} mode - The new map mode ('political', 'development', etc.)*/
+
+export function setMapMode(mode) {
+    currentMapMode = mode;
+    document.querySelectorAll('.map-modes button').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`${mode}Button`).classList.add('active');
+    requestRender();
+}

@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.env
+.env.local
+dist/
+build/
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+.vscode/
+*.code-workspace
