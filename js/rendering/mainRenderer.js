@@ -9,6 +9,7 @@ import { renderFocusHighlight, renderSociologyHighlight, renderNationLabels, ren
 const canvas = document.getElementById("map");
 const ctx = canvas.getContext("2d");
 
+let needsRender = true;
 let animationFrameId = null;
 export let currentMapMode = 'physical';
 
@@ -46,9 +47,9 @@ export function createRenderLayers() {
 
 //Main render loop. Draws the appropriate layers to the main canvas.
 
-function renderMap() {
+function drawFrame() {
     try {
-        console.log(`renderMap triggered. Mode: ${currentMapMode}, Selection Level: ${selection.level}`);
+        console.log(`drawFrame triggered. Mode: ${currentMapMode}, Selection Level: ${selection.level}`);
 
         animationFrameId = null;
         if (!world.tiles || world.tiles.length === 0) return;
@@ -120,12 +121,23 @@ function renderMap() {
     }
 }
 
+function renderLoop() {
+    if (needsRender) {
+        drawFrame(); // Call the renamed render function
+        needsRender = false; // Reset the flag after drawing
+    }
+    // Keep the loop running forever
+    requestAnimationFrame(renderLoop);
+}
+
 //Requests a new frame to be rendered.
 
 export function requestRender() {
-    if (!animationFrameId) {
-        animationFrameId = requestAnimationFrame(renderMap);
-    }
+    needsRender = true;
+}
+
+export function startRenderLoop() {
+    renderLoop();
 }
 
 /**Sets the current map mode and triggers a re-render

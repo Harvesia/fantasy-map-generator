@@ -4,6 +4,7 @@ set up event listeners, and trigger the initial world generation.*/
 
 import { generateAndRenderWorld } from './core/state.js';
 import { setupEventListeners } from './listeners.js';
+import { startRenderLoop } from './rendering/mainRenderer.js'; //
 
 // Initializes the application when the window has loaded
 window.onload = () => {
@@ -18,7 +19,8 @@ window.onload = () => {
 
     // Set up all user interaction listeners
     setupEventListeners();
-
+    // Start the render loop
+    startRenderLoop(); 
     // Generate the first world
     generateAndRenderWorld();
 };
