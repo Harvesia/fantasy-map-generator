@@ -60,6 +60,30 @@ generationWorker.onmessage = (e) => {
         loadingStatus.textContent = "Generation Complete!";
         generateButton.disabled = false;
         updateTileInfo(Math.floor(GRID_WIDTH / 2), Math.floor(GRID_HEIGHT / 2));
+        console.log("1. Worker message 'complete' received.");
+        console.log("2. World object reconstructed. Inspecting maps and sets:", {
+            nations: world.nations instanceof Map,
+            provinces: world.provinces instanceof Map,
+            firstNationAllies: world.nations.values().next().value.allies instanceof Set
+        });
+
+        console.dir(world); 
+    
+        loadingStatus.textContent = "Creating render layers...";
+    
+        console.log("3. Calling createRenderLayers().");
+        createRenderLayers();
+        console.log("4. createRenderLayers() finished.");
+    
+        fitMapToScreen();
+    
+        console.log("5. Calling setMapMode('political').");
+        setMapMode('political');
+        
+        loadingStatus.textContent = "Generation Complete!";
+        generateButton.disabled = false;
+        updateTileInfo(Math.floor(GRID_WIDTH / 2), Math.floor(GRID_HEIGHT / 2));
+        console.log("6. Initialization complete.");
     }
 };
 

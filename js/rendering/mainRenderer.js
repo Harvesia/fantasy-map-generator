@@ -47,73 +47,77 @@ export function createRenderLayers() {
 //Main render loop. Draws the appropriate layers to the main canvas.
 
 function renderMap() {
-    animationFrameId = null;
-    if (!world.tiles || world.tiles.length === 0) return;
+    try {
+        console.log(`renderMap triggered. Mode: ${currentMapMode}, Selection Level: ${selection.level}`);
 
-    // Resize canvas if needed
-    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-        ctx.imageSmoothingEnabled = false;
-    }
+        animationFrameId = null;
+        if (!world.tiles || world.tiles.length === 0) return;
 
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(viewport.zoom, viewport.zoom);
-    ctx.translate(-viewport.x, -viewport.y);
-
-    const viewLeft = viewport.x;
-    const viewTop = viewport.y;
-    const viewRight = viewport.x + canvas.width / viewport.zoom;
-    const viewBottom = viewport.y + canvas.height / viewport.zoom;
-
-    // Draw the base terrain layer
-    if (renderLayers.terrain) {
-        ctx.drawImage(renderLayers.terrain, 0, 0);
-    }
-
-    // Draw the current map mode layer or selection-based layer
-    if (selection.level === 0) { // No selection
-        if (currentMapMode !== 'physical' && renderLayers[currentMapMode]) {
-             ctx.drawImage(renderLayers[currentMapMode], 0, 0);
+        // Resize canvas if needed
+        if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            ctx.imageSmoothingEnabled = false;
         }
-    } else { 
-        // Always show political layer as base for selections
-        if (renderLayers.political) {
-            ctx.drawImage(renderLayers.political, 0, 0);
+
+        ctx.save();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(viewport.zoom, viewport.zoom);
+        ctx.translate(-viewport.x, -viewport.y);
+
+        const viewLeft = viewport.x;
+        const viewTop = viewport.y;
+        const viewRight = viewport.x + canvas.width / viewport.zoom;
+        const viewBottom = viewport.y + canvas.height / viewport.zoom;
+
+        // 1. Draw the base terrain layer
+        if (renderLayers.terrain) {
+            ctx.drawImage(renderLayers.terrain, 0, 0);
         }
-        // Draw specific selection highlights on top
-        if (currentMapMode === 'diplomatic' && selection.nationId !== null) {
-            const diplomaticLayer = renderDiplomaticMode(selection.nationId);
-            ctx.drawImage(diplomaticLayer, 0, 0);
-        } else {
-            renderFocusHighlight(ctx);
+
+        // 2. Draw the current map mode layer or selection-based layer
+        if (selection.level === 0) { // No selection
+            if (currentMapMode !== 'physical' && renderLayers[currentMapMode]) {
+                ctx.drawImage(renderLayers[currentMapMode], 0, 0);
+            }
+        } else { // Something is selected
+            if (renderLayers.political) {
+                ctx.drawImage(renderLayers.political, 0, 0);
+            }
+            if (currentMapMode === 'diplomatic' && selection.nationId !== null) {
+                const diplomaticLayer = renderDiplomaticMode(selection.nationId);
+                ctx.drawImage(diplomaticLayer, 0, 0);
+            } else {
+                renderFocusHighlight(ctx);
+            }
         }
-    }
 
-    // Draw dynamic overlays (highlights, borders, labels)
-    if (selection.cultureId !== null) {
-        renderSociologyHighlight(ctx, 'culture');
-    } else if (selection.religionId !== null) {
-        renderSociologyHighlight(ctx, 'religion');
-    }
-    
-    if (currentMapMode !== 'physical' || selection.level > 0) {
-        drawBorders(ctx);
-    }
+        // 3. Draw dynamic overlays
+        if (selection.cultureId !== null) {
+            renderSociologyHighlight(ctx, 'culture');
+        } else if (selection.religionId !== null) {
+            renderSociologyHighlight(ctx, 'religion');
+        }
+        
+        if (currentMapMode !== 'physical' || selection.level > 0) {
+            drawBorders(ctx);
+        }
 
-    if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || selection.level > 0) {
-        renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom);
-        if(currentMapMode === 'political' && selection.level === 0) drawDiplomacyLines(ctx);
-    }
-    if (currentMapMode === 'culture') {
-        renderSociologyLabels(ctx, 'culture');
-    }
-    if (currentMapMode === 'religion') {
-        renderSociologyLabels(ctx, 'religion');
-    }
+        if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || selection.level > 0) {
+            renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom);
+            if(currentMapMode === 'political' && selection.level === 0) drawDiplomacyLines(ctx);
+        }
+        if (currentMapMode === 'culture') {
+            renderSociologyLabels(ctx, 'culture');
+        }
+        if (currentMapMode === 'religion') {
+            renderSociologyLabels(ctx, 'religion');
+        }
 
-    ctx.restore();
+        ctx.restore();
+    } catch (error) {
+        console.error("!!! FATAL ERROR IN RENDER LOOP !!!", error);
+    }
 }
 
 //Requests a new frame to be rendered.
