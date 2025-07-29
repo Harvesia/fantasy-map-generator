@@ -26,7 +26,7 @@ export let selection = {
 /* Create the generation worker.
 The `{ type: 'module' }` option is removed as the worker is now self-contained.*/
 
-const generationWorker = new Worker(new URL('../generation_worker.js', import.meta.url));
+const generationWorker = new Worker(new URL('../generation_worker.js', import.meta.url), { type: 'module'});
 
 // Handle messages from the worker
 generationWorker.onmessage = (e) => {
