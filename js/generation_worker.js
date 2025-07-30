@@ -386,36 +386,46 @@ function calculateNationPowerAndCapitals() {
             }
         });
         nation.power = totalPower;
-        if (capitalCounty) {
+        if (capitalCounty && capitalCounty.tiles.size > 0) {
             let capX = 0, capY = 0;
-            let tileCount = 0;
-            let landTiles = [];
+            const landTiles = [];
             capitalCounty.tiles.forEach(tileIndex => {
                 const tile = world.tiles[tileIndex];
                 capX += tile.x;
                 capY += tile.y;
-                tileCount++;
-                if (tile.biome !== BIOMES.OCEAN && tile.biome !== BIOMES.DEEP_OCEAN) {
+                if (tile.biome.cost < 1000) { // A simple way to check for land
                     landTiles.push(tile);
                 }
             });
-            const avgX = Math.round(capX / tileCount);
-            const avgY = Math.round(capY / tileCount);
-            const avgTile = world.tiles[avgY * GRID_WIDTH + avgX];
-            if (avgTile && (avgTile.biome === BIOMES.OCEAN || avgTile.biome === BIOMES.DEEP_OCEAN)) {
+
+            // If there are no land tiles, we can't set a capital. Fallback to the seed.
+            if (landTiles.length === 0) {
+                nation.capital = nation.capitalSeed;
+                return;
+            }
+
+            const avgX = Math.round(capX / capitalCounty.tiles.size);
+            const avgY = Math.round(capY / capitalCounty.tiles.size);
+
+            let finalCapitalTile = world.tiles[avgY * GRID_WIDTH + avgX];
+            const finalCapitalCountyId = world.countyGrid[avgY] ? world.countyGrid[avgY][avgX] : null;
+
+            // Check if the calculated average point is invalid (not on land OR not in the correct county)
+            if (!finalCapitalTile || finalCapitalCountyId !== capitalCounty.id || finalCapitalTile.biome.cost >= 1000) {
                 let closestLandTile = null;
-                let min_d = Infinity;
+                let minDistance = Infinity;
+                // Find the land tile in the county that is closest to the calculated average
                 landTiles.forEach(tile => {
-                    const d = Math.hypot(tile.x - avgX, tile.y - avgY);
-                    if (d < min_d) {
-                        min_d = d;
+                    const distance = Math.hypot(tile.x - avgX, tile.y - avgY);
+                    if (distance < minDistance) {
+                        minDistance = distance;
                         closestLandTile = tile;
                     }
                 });
-                nation.capital = closestLandTile ? { x: closestLandTile.x, y: closestLandTile.y } : nation.capitalSeed;
-            } else {
-                nation.capital = { x: avgX, y: avgY };
+                finalCapitalTile = closestLandTile;
             }
+            
+            nation.capital = { x: finalCapitalTile.x, y: finalCapitalTile.y };
         } else {
             nation.capital = nation.capitalSeed;
         }

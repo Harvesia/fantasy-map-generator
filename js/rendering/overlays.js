@@ -34,15 +34,24 @@ export function drawBorders(ctx) {
     const drawGridBorders = (grid, style) => {
         for (let y = 0; y < Config.GRID_HEIGHT; y++) {
             for (let x = 0; x < Config.GRID_WIDTH; x++) {
-                
                 const currentId = grid[y][x];
-                if (currentId === null) continue;
 
-                if (x + 1 < Config.GRID_WIDTH && currentId !== grid[y][x + 1]) {
-                    drawBorderLine(ctx, x, y, 'right', style);
+                // Check right neighbor
+                if (x + 1 < Config.GRID_WIDTH) {
+                    const rightId = grid[y][x + 1];
+                    // Draw a border if IDs are different, but not if both are water (null)
+                    if (currentId !== rightId && (currentId !== null || rightId !== null)) {
+                        drawBorderLine(ctx, x, y, 'right', style);
+                    }
                 }
-                if (y + 1 < Config.GRID_HEIGHT && currentId !== grid[y + 1][x]) {
-                    drawBorderLine(ctx, x, y, 'down', style);
+
+                // Check bottom neighbor
+                if (y + 1 < Config.GRID_HEIGHT) {
+                    const downId = grid[y + 1][x];
+                    // Draw a border if IDs are different, but not if both are water (null)
+                    if (currentId !== downId && (currentId !== null || downId !== null)) {
+                        drawBorderLine(ctx, x, y, 'down', style);
+                    }
                 }
             }
         }
