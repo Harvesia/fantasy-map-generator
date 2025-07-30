@@ -79,7 +79,7 @@ function drawFrame() {
         // 2. Draw the current map mode layer AND/OR selection highlights
         if (currentMapMode === 'diplomatic' && selection.nationId !== null) {
             // Diplomatic mode is special, it's a full overlay. Pass the terrain layer to it.
-            const diplomaticLayer = renderDiplomaticMode(selection.nationId, renderLayers.terrain);
+            const diplomaticLayer = renderDiplomaticMode(selection.nationId);
             ctx.drawImage(diplomaticLayer, 0, 0);
         } else if (selection.level === 0) { // No selection, not diplomatic
             // Draw the full map mode layer if one exists for the current mode

@@ -106,6 +106,7 @@ function handleCanvasClick(e) {
             selection.religionId = (selection.religionId === religionId) ? null : religionId;
         }
     } else {
+        if (currentMapMode === 'development') return; 
         selection.cultureId = null;
         selection.religionId = null;
         const clickedCountyId = world.countyGrid[y][x];

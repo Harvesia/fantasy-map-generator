@@ -34,8 +34,6 @@ export function drawBorders(ctx) {
     const drawGridBorders = (grid, style) => {
         for (let y = 0; y < Config.GRID_HEIGHT; y++) {
             for (let x = 0; x < Config.GRID_WIDTH; x++) {
-                const tile = world.tiles[y * Config.GRID_WIDTH + x];
-                if (!tile || tile.biome === Config.BIOMES.OCEAN || tile.biome === Config.BIOMES.DEEP_OCEAN) continue;
                 
                 const currentId = grid[y][x];
                 if (currentId === null) continue;

@@ -358,15 +358,6 @@ function assignSubdivisionsToParents(level, parentLevel, parentCapitals) {
 }
 
 function calculateNationPowerAndCapitals() {
-    const landlessNations = [];
-    world.nations.forEach(nation => {
-        if (nation.children.size === 0) {
-            landlessNations.push(nation.id);
-        }
-    });
-    landlessNations.forEach(nationId => {
-        world.nations.delete(nationId);
-    });
     world.provinces.forEach(province => {
         let totalDev = 0;
         province.children.forEach(countyId => {
@@ -848,14 +839,25 @@ self.onmessage = (e) => {
         
         post("11. Fixing Exclaves...");
         fixExclaves();
-        
-        post("12. Building Adjacency Graph...");
+
+        post("12. Removing Landless Nation..");
+        const landlessNations = [];
+        world.nations.forEach(nation => {
+            if (nation.children.size === 0) {
+                landlessNations.push(nation.id);
+            }
+        });
+        landlessNations.forEach(nationId => {
+            world.nations.delete(nationId);
+        });
+
+        post("13. Building Adjacency Graph...");
         buildNationAdjacencyGraph();
         
-        post("13. Simulating Diplomacy...");
+        post("14. Simulating Diplomacy...");
         generateDiplomacy(rand);
         
-        post("14. Coloring Nations...");
+        post("15. Coloring Nations...");
         colorNations(rand);
 
         // Convert Maps and Sets to Arrays for safe cloning
