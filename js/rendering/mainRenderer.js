@@ -82,13 +82,15 @@ function drawFrame() {
                 ctx.drawImage(renderLayers[currentMapMode], 0, 0);
             }
         } else { // Something is selected
-            if (renderLayers.political) {
-                ctx.drawImage(renderLayers.political, 0, 0);
-            }
+            // If the mode is diplomatic, handle it separately to prevent the political map from showing through.
             if (currentMapMode === 'diplomatic' && selection.nationId !== null) {
                 const diplomaticLayer = renderDiplomaticMode(selection.nationId);
                 ctx.drawImage(diplomaticLayer, 0, 0);
             } else {
+                // For all other selections, draw the political map and then the highlight.
+                if (renderLayers.political) {
+                    ctx.drawImage(renderLayers.political, 0, 0);
+                }
                 renderFocusHighlight(ctx);
             }
         }

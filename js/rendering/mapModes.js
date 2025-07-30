@@ -42,7 +42,7 @@ export function renderDevelopmentMode() {
              const county = world.counties.get(countyId);
              if(county && county.development > 0) {
                 const normalizedDev = county.development / maxDev;
-                const hue = 120 - (120 * normalizedDev);
+                const hue = 120 * normalizedDev;
                 ctx.fillStyle = `hsl(${hue}, 90%, 50%)`;
                 ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
              }
