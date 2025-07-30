@@ -1,7 +1,7 @@
 /*The main rendering engine. Handles the animation loop, drawing layers
 from offscreen canvases, and managing map modes*/
 
-import { viewport, world, selection } from '../core/state.js';
+import { viewport, world, selection, resetSelection } from '../core/state.js';
 import * as Config from '../core/config.js';
 import { renderPoliticalMode, renderDevelopmentMode, renderCultureMode, renderReligionMode, renderDiplomaticMode } from './mapModes.js';
 import { renderFocusHighlight, renderSociologyHighlight, renderNationLabels, renderSociologyLabels, drawBorders, drawDiplomacyLines } from './overlays.js';
@@ -144,6 +144,7 @@ export function startRenderLoop() {
 @param {string} mode - The new map mode ('political', 'development', etc.)*/
 
 export function setMapMode(mode) {
+    resetSelection(false);
     currentMapMode = mode;
     document.querySelectorAll('.map-modes button').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`${mode}Button`).classList.add('active');

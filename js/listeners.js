@@ -22,11 +22,12 @@ export function setupEventListeners() {
     document.getElementById('cultureButton').onclick = () => setMapMode('culture');
     document.getElementById('religionButton').onclick = () => setMapMode('religion');
     document.getElementById('diplomaticButton').onclick = () => {
-        if (!selection.nationId && world.nations && world.nations.size > 0) {
+        setMapMode('diplomatic');
+        if (world.nations && world.nations.size > 0) {
             selection.nationId = Array.from(world.nations.values()).sort((a,b) => b.power - a.power)[0].id;
             selection.level = 1;
+            requestRender();
         }
-        setMapMode('diplomatic');
     };
     document.getElementById('controls-header').onclick = () => {
         const controls = document.getElementById('controls');

@@ -8,14 +8,23 @@ import { nameParts } from './config.js';
 @returns {function(): number} A function that returns a random number between 0 and 1*/
 
 export function createSeededRandom(seed) {
-    let x = 0;
-    for (let i = 0; i < seed.length; i++) {
-        x += seed.charCodeAt(i) * Math.pow(10, i % 10);
+    // Create a hash from the seed string.
+    let h = 1779033703, i = 0, ch;
+    for (i = 0; i < seed.length; i++) {
+        ch = seed.charCodeAt(i);
+        h = Math.imul(h ^ ch, 2654435761);
     }
-    return () => {
-        x = Math.sin(x) * 10000;
-        return x - Math.floor(x);
-    };
+    h = Math.imul(h ^ h >>> 16, 2246822507);
+    h = Math.imul(h ^ h >>> 13, 3266489909);
+    let a = (h ^= h >>> 16) >>> 0;
+
+    // Mulberry32 algorithm
+    return function() {
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
 }
 
 /**A simple Perlin/Simplex-like noise generator.
