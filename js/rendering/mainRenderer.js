@@ -76,23 +76,23 @@ function drawFrame() {
             ctx.drawImage(renderLayers.terrain, 0, 0);
         }
 
-        // 2. Draw the current map mode layer or selection-based layer
-        if (selection.level === 0) { // No selection
+        // 2. Draw the current map mode layer AND/OR selection highlights
+        if (currentMapMode === 'diplomatic' && selection.nationId !== null) {
+            // Diplomatic mode is special, it's a full overlay. Pass the terrain layer to it.
+            const diplomaticLayer = renderDiplomaticMode(selection.nationId, renderLayers.terrain);
+            ctx.drawImage(diplomaticLayer, 0, 0);
+        } else if (selection.level === 0) { // No selection, not diplomatic
+            // Draw the full map mode layer if one exists for the current mode
             if (currentMapMode !== 'physical' && renderLayers[currentMapMode]) {
                 ctx.drawImage(renderLayers[currentMapMode], 0, 0);
             }
-        } else { // Something is selected
-            // If the mode is diplomatic, handle it separately to prevent the political map from showing through.
-            if (currentMapMode === 'diplomatic' && selection.nationId !== null) {
-                const diplomaticLayer = renderDiplomaticMode(selection.nationId);
-                ctx.drawImage(diplomaticLayer, 0, 0);
-            } else {
-                // For all other selections, draw the political map and then the highlight.
-                if (renderLayers.political) {
-                    ctx.drawImage(renderLayers.political, 0, 0);
-                }
-                renderFocusHighlight(ctx);
+        } else { // Something is selected, but not in diplomatic mode
+            // Draw the appropriate map mode layer first (e.g., Development)
+            if (currentMapMode !== 'physical' && renderLayers[currentMapMode]) {
+                ctx.drawImage(renderLayers[currentMapMode], 0, 0);
             }
+            // Then draw the highlight on top of it
+            renderFocusHighlight(ctx);
         }
 
         // 3. Draw dynamic overlays

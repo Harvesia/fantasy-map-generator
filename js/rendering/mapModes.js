@@ -84,25 +84,42 @@ export function renderReligionMode() {
     return canvas;
 }
 
-export function renderDiplomaticMode(selectedNationId) {
+export function renderDiplomaticMode(selectedNationId, terrainCanvas) {
     const { canvas, ctx } = createLayerCanvas();
     const selected = world.nations.get(selectedNationId);
-    if (!selected) return canvas;
+    if (!selected || !terrainCanvas) return canvas;
 
+    // Draw a grey overlay over the whole map first as a base for neutral nations
+    ctx.fillStyle = 'rgba(128, 128, 128, 0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Go through each tile and draw the correct view
     for (let y = 0; y < Config.GRID_HEIGHT; y++) {
         for (let x = 0; x < Config.GRID_WIDTH; x++) {
             const nationId = world.nationGrid[y][x];
-            if (nationId !== null) {
-                const nation = world.nations.get(nationId);
-                let color;
-                if (nation.id === selectedNationId) color = 'rgba(0,0,0,0)'; 
-                else if (selected.allies.has(nation.id)) color = 'rgba(0, 255, 100, 0.5)';
-                else if (selected.vassals.has(nation.id)) color = 'rgba(150, 50, 255, 0.5)';
-                else if (selected.suzerain === nation.id) color = 'rgba(255, 215, 0, 0.5)';
-                else if (selected.atWarWith.has(nation.id)) color = 'rgba(255, 40, 40, 0.5)';
-                else color = 'rgba(128, 128, 128, 0.7)';
-                
-                ctx.fillStyle = color;
+            if (nationId === null) continue;
+
+            const nation = world.nations.get(nationId);
+            if (!nation) continue;
+
+            if (nation.id === selectedNationId) {
+                // For the selected nation, copy its terrain from the terrain canvas
+                const TILE_SIZE = Config.TILE_SIZE;
+                ctx.drawImage(terrainCanvas,
+                    x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, // Source rect from terrain canvas
+                    x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE  // Destination rect on  canvas
+                );
+            } else if (selected.allies.has(nation.id)) {
+                ctx.fillStyle = 'rgba(0, 255, 100, 0.5)';
+                ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+            } else if (selected.vassals.has(nation.id)) {
+                ctx.fillStyle = 'rgba(150, 50, 255, 0.5)';
+                ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+            } else if (selected.suzerain === nation.id) {
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+                ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+            } else if (selected.atWarWith.has(nation.id)) {
+                ctx.fillStyle = 'rgba(255, 40, 40, 0.5)';
                 ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
             }
         }
