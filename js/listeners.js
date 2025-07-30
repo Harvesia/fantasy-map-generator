@@ -150,9 +150,8 @@ export function updateTileInfo(x, y) {
     const cultureId = world.cultureGrid[y][x];
     const religionId = world.religionGrid[y][x];
 
-    let infoHTML = `<b>Coords:</b> (${x}, ${y})<br><b>Biome:</b> ${tile.biome.name}<br>
-                    <b>Dev:</b> ${world.development[y * Config.GRID_WIDTH + x].toFixed(2)}`;
-    
+    let infoHTML = `<b>Coords:</b> (${x}, ${y})<br><b>Biome:</b> ${tile.biome.name}`;
+
     if (cultureId !== null && world.cultures[cultureId]) infoHTML += `<br><b>Culture:</b> ${world.cultures[cultureId].name}`;
     if (religionId !== null && world.religions[religionId]) infoHTML += `<br><b>Religion:</b> ${world.religions[religionId].name}`;
 
@@ -160,10 +159,11 @@ export function updateTileInfo(x, y) {
         const nation = world.nations.get(nationId);
         const province = world.provinces.get(provinceId);
         const county = world.counties.get(countyId);
+
         infoHTML += `<hr style="border-color: #444; margin: 5px 0;">
                     <b>Nation:</b> ${nation.name} (Power: ${nation.power.toFixed(0)})<br>
-                    <b>Province:</b> ${province?.name || 'N/A'} (Dev: ${province?.development.toFixed(0)})<br>
-                    <b>County:</b> ${county?.name || 'N/A'}`;
+                    <b>Province:</b> ${province?.name || 'N/A'}<br>
+                    <b>County:</b> ${county?.name || 'N/A'} (Dev: ${county?.development || 0})`;
         
         if(nation.suzerain !== null && world.nations.has(nation.suzerain)) infoHTML += `<br><b>Suzerain:</b> ${world.nations.get(nation.suzerain).name}`;
         if(nation.vassals.size > 0) infoHTML += `<br><b>Vassals:</b> ${Array.from(nation.vassals).map(id => world.nations.has(id) ? world.nations.get(id).name : '').filter(n => n).join(', ')}`;
@@ -172,6 +172,7 @@ export function updateTileInfo(x, y) {
     }
     tileInfo.innerHTML = infoHTML;
 }
+
 
 function startKeyboardPanLoop() {
     let lastTime = 0;

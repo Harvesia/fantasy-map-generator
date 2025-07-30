@@ -225,33 +225,6 @@ function assignBiomes(rand) {
     }
 }
 
-function calculateDevelopment(rand) {
-    const devCores = [];
-    const numCores = 6;
-    for (let i = 0; i < numCores; i++) {
-        let x, y, tile;
-        do {
-            x = Math.floor(rand() * GRID_WIDTH);
-            y = Math.floor(rand() * GRID_HEIGHT);
-            tile = world.tiles[y * GRID_WIDTH + x];
-        } while (tile.biome === BIOMES.OCEAN || tile.biome === BIOMES.DEEP_OCEAN || tile.biome === BIOMES.MOUNTAIN || tile.biome === BIOMES.SNOW);
-        devCores.push({x, y, strength: 1 + rand() * 4});
-    }
-    world.development = new Float32Array(world.tiles.length);
-    for (let i = 0; i < world.tiles.length; i++) {
-        const tile = world.tiles[i];
-        let coreBonus = 0;
-        for (const core of devCores) {
-            const dist = Math.hypot(tile.x - core.x, tile.y - core.y);
-            if (dist < GRID_WIDTH / 5) {
-                coreBonus += (1 - (dist / (GRID_WIDTH / 5))) * core.strength;
-            }
-        }
-        const dev = Math.max(1, (1 + tile.biome.dev + coreBonus) / 2);
-        world.development[i] = dev;
-    }
-}
-
 function generateSubdivisions(level, count, rand, usedNames) {
     const capitals = [], parentLevel = level === 'province' ? 'county' : (level === 'nation' ? 'province' : null);
     const childGrid = level === 'county' ? world.countyGrid : (level === 'province' ? world.provinceGrid : world.nationGrid);
@@ -265,7 +238,7 @@ function generateSubdivisions(level, count, rand, usedNames) {
         capitals.push({ id: i, x, y });
         map.set(i, { id: i, name: randomName(rand, usedNames), capitalSeed: {x,y}, color: `hsl(${Math.floor(rand() * 360)}, 70%, 50%)`, children: new Set() });
     }
-    if (level === 'county') assignTilesToCounties(capitals, childGrid);
+    if (level === 'county') assignTilesToCounties(capitals, childGrid, rand);
     else assignSubdivisionsToParents(level, parentLevel, capitals);
     if (parentLevel) {
         const parentMap = level === 'province' ? world.counties : world.provinces;
@@ -288,39 +261,33 @@ function generateSubdivisions(level, count, rand, usedNames) {
     }
 }
 
-function assignTilesToCounties(capitals, countyGrid) {
+function assignTilesToCounties(capitals, countyGrid, rand) {
     const costs = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(Infinity));
     const frontier = [];
-    const MAX_COASTAL_DISTANCE = 4;
     capitals.forEach(cap => {
         costs[cap.y][cap.x] = 0;
         countyGrid[cap.y][cap.x] = cap.id;
-        frontier.push({x: cap.x, y: cap.y, cost: 0, seaDistance: 0}); 
+        frontier.push({x: cap.x, y: cap.y, cost: 0, seaDistance: 0});
         const county = world.counties.get(cap.id);
         county.tiles = new Set();
-        county.development = 0;
+        county.development = 0; // Initialize dev
     });
+
     while (frontier.length > 0) {
         frontier.sort((a, b) => b.cost - a.cost);
         const current = frontier.pop();
         const tileIndex = current.y * GRID_WIDTH + current.x;
-        const currentTile = world.tiles[tileIndex];
-        const isCurrentTileWater = currentTile.biome === BIOMES.OCEAN || currentTile.biome === BIOMES.DEEP_OCEAN;
         const county = world.counties.get(countyGrid[current.y][current.x]);
         county.tiles.add(tileIndex);
-        county.development += world.development[tileIndex];
         const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
         for (const [dx, dy] of neighbors) {
             const nx = current.x + dx, ny = current.y + dy;
             if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
                 const neighborTile = world.tiles[ny * GRID_WIDTH + nx];
-                const newCost = current.cost + neighborTile.biome.cost + (Math.random() * 2);
-                const isNeighborTileWater = neighborTile.biome === BIOMES.OCEAN || neighborTile.biome === BIOMES.DEEP_OCEAN;
-                let newSeaDistance = 0;
-                if (isNeighborTileWater) {
-                    newSeaDistance = isCurrentTileWater ? current.seaDistance + 1 : 1;
-                }
-                if (newCost < costs[ny][nx] && newSeaDistance <= MAX_COASTAL_DISTANCE) {
+                const newCost = current.cost + neighborTile.biome.cost + (rand() * 2);
+                const isNeighborTileWater = neighborTile.biome.cost >= 1000;
+                let newSeaDistance = isNeighborTileWater ? (current.seaDistance || 0) + 1 : 0;
+                if (newCost < costs[ny][nx] && newSeaDistance <= 4) {
                     costs[ny][nx] = newCost;
                     countyGrid[ny][nx] = countyGrid[current.y][current.x];
                     frontier.push({x: nx, y: ny, cost: newCost, seaDistance: newSeaDistance});
@@ -328,7 +295,54 @@ function assignTilesToCounties(capitals, countyGrid) {
             }
         }
     }
+
+    // After tiles are assigned, calculate development for each county
+    const devCores = [];
+    const numCores = Math.floor((GRID_WIDTH * GRID_HEIGHT) / 10000); // Scale cores with map size
+    for (let i = 0; i < numCores; i++) {
+        let x, y;
+        do {
+            x = Math.floor(rand() * GRID_WIDTH);
+            y = Math.floor(rand() * GRID_HEIGHT);
+        } while (world.tiles[y * GRID_WIDTH + x].biome.cost >= 1000); // Only on land
+        devCores.push({x, y, strength: 2 + rand() * 8 }); // Strength from 2 to 10
+    }
+
+    world.counties.forEach(county => {
+        if (county.tiles.size === 0) {
+            county.development = 0;
+            return;
+        }
+
+        let totalBiomeDev = 0, landTileCount = 0, avgTileX = 0, avgTileY = 0;
+        county.tiles.forEach(tileIndex => {
+            const tile = world.tiles[tileIndex];
+            avgTileX += tile.x; avgTileY += tile.y;
+            if (tile.biome.cost < 1000) {
+                totalBiomeDev += tile.biome.dev;
+                landTileCount++;
+            }
+        });
+
+        if (landTileCount === 0) { county.development = 0; return; }
+        avgTileX /= county.tiles.size; avgTileY /= county.tiles.size;
+
+        let coreBonus = 0;
+        for (const core of devCores) {
+            const dist = Math.hypot(avgTileX - core.x, avgTileY - core.y);
+            const influenceRadius = GRID_WIDTH / 7;
+            if (dist < influenceRadius) {
+                coreBonus += (1 - (dist / influenceRadius)) * core.strength;
+            }
+        }
+
+        const avgBiomeDev = totalBiomeDev / landTileCount;
+        const baseDev = 3; // All counties start with a base of 3 dev
+        let finalDev = baseDev + (avgBiomeDev * 2) + coreBonus + ((rand() - 0.5) * 2);
+        county.development = Math.round(Math.max(1, finalDev));
+    });
 }
+
 
 function assignSubdivisionsToParents(level, parentLevel, parentCapitals) {
     const childMap = parentLevel === 'county' ? world.counties : world.provinces;
@@ -828,29 +842,26 @@ self.onmessage = (e) => {
         post("4. Assigning Biomes...");
         assignBiomes(rand);
         
-        post("5. Calculating Development...");
-        calculateDevelopment(rand);
-        
-        post("6. Forming Counties...");
+        post("5. Forming Counties...");
         generateSubdivisions('county', COUNTY_COUNT, rand, usedNames);
         
-        post("7. Spreading Cultures & Religions...");
+        post("6. Spreading Cultures & Religions...");
         generateSociologyNames(rand, usedNames);
         generateSociology(rand);
         
-        post("8. Forming Provinces...");
+        post("7. Forming Provinces...");
         generateSubdivisions('province', PROVINCE_COUNT, rand, usedNames);
         
-        post("9. Forming Nations...");
+        post("8. Forming Nations...");
         generateSubdivisions('nation', NATION_COUNT, rand, usedNames);
         
-        post("10. Calculating Power...");
+        post("9. Calculating Power...");
         calculateNationPowerAndCapitals();
         
-        post("11. Fixing Exclaves...");
+        post("10. Fixing Exclaves...");
         fixExclaves();
 
-        post("12. Removing Landless Nation..");
+        post("11. Removing Landless Nation..");
         const landlessNations = [];
         world.nations.forEach(nation => {
             if (nation.children.size === 0) {
@@ -861,13 +872,13 @@ self.onmessage = (e) => {
             world.nations.delete(nationId);
         });
 
-        post("13. Building Adjacency Graph...");
+        post("12. Building Adjacency Graph...");
         buildNationAdjacencyGraph();
         
-        post("14. Simulating Diplomacy...");
+        post("13. Simulating Diplomacy...");
         generateDiplomacy(rand);
         
-        post("15. Coloring Nations...");
+        post("14. Coloring Nations...");
         colorNations(rand);
 
         // Convert Maps and Sets to Arrays for safe cloning
