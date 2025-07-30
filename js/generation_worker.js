@@ -654,164 +654,157 @@ function colorNations(rand) {
     }
 }
 
-function generateSociology(rand, usedNames) {
-    // Determine Culture Hearths
-    console.log("Generating Culture Hearths...");
-    const cultureHearths = [];
-    const numMajorCultures = 5 + Math.floor(rand() * 3); // 5-7 major cultures
-    const numMinorCultures = 8 + Math.floor(rand() * 5); // 8-12 minor/isolated cultures
+function colorSociology(rand, sociologyType, grid) {
+    const items = world[sociologyType];
+    if (!items || items.length === 0) return;
 
-    // Biomes suitable for the origin of civilizations
-    const hearthBiomes = new Set([
-        BIOMES.GRASSLAND.name, BIOMES.FOREST.name, BIOMES.BEACH.name, BIOMES.RIVER.name
-    ]);
-    // Biomes for isolated cultures
-    const isolationBiomes = new Set([
-        BIOMES.JUNGLE.name, BIOMES.MOUNTAIN.name, BIOMES.DESERT.name, BIOMES.TAIGA.name, BIOMES.WETLAND.name
-    ]);
+    // Build an adjacency graph to know which groups border each other
+    const adjacency = new Map();
+    items.forEach(item => adjacency.set(item.id, new Set()));
 
-    const potentialHearths = world.tiles.filter(t => hearthBiomes.has(t.biome.name));
-    const potentialIsolations = world.tiles.filter(t => isolationBiomes.has(t.biome.name));
-
-    // Create major cultures in fertile regions
-    for (let i = 0; i < numMajorCultures; i++) {
-        const tile = potentialHearths[Math.floor(rand() * potentialHearths.length)];
-        cultureHearths.push({ x: tile.x, y: tile.y, id: i });
-    }
-    // Create minor cultures in remote areas
-    for (let i = 0; i < numMinorCultures; i++) {
-        if (potentialIsolations.length > 0) {
-            const tile = potentialIsolations[Math.floor(rand() * potentialIsolations.length)];
-            cultureHearths.push({ x: tile.x, y: tile.y, id: numMajorCultures + i });
-        }
-    }
-    
-    world.cultures = cultureHearths.map(h => ({
-        id: h.id,
-        name: randomName(rand, usedNames),
-        color: `hsl(${Math.floor(rand() * 360)}, 60%, 60%)`
-    }));
-
-    // Spread cultures through geography
-    console.log("Spreading Cultures...");
-    world.cultureGrid = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(null));
-    const cultureCosts = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(Infinity));
-    const frontier = [];
-
-    cultureHearths.forEach(hearth => {
-        cultureCosts[hearth.y][hearth.x] = 0;
-        world.cultureGrid[hearth.y][hearth.x] = hearth.id;
-        frontier.push({ x: hearth.x, y: hearth.y, cost: 0 });
-    });
-
-    while (frontier.length > 0) {
-        frontier.sort((a, b) => b.cost - a.cost);
-        const current = frontier.pop();
-        const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-
-        for (const [dx, dy] of neighbors) {
-            const nx = current.x + dx, ny = current.y + dy;
-            if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
-                const neighborTile = world.tiles[ny * GRID_WIDTH + nx];
-                if(neighborTile.biome === BIOMES.DEEP_OCEAN) continue; // Culture doesn't spread to deep ocean
-
-                // Spread cost affected by terrain
-                const moveCost = neighborTile.biome.cost;
-                const newCost = current.cost + 1 + moveCost;
-
-                if (newCost < cultureCosts[ny][nx]) {
-                    cultureCosts[ny][nx] = newCost;
-                    world.cultureGrid[ny][nx] = world.cultureGrid[current.y][current.x];
-                    frontier.push({ x: nx, y: ny, cost: newCost });
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            const currentId = grid[y][x];
+            if (currentId === null) continue;
+            
+            // Check right and down neighbors
+            [[1, 0], [0, 1]].forEach(([dx, dy]) => {
+                const nx = x + dx, ny = y + dy;
+                if (nx < GRID_WIDTH && ny < GRID_HEIGHT) {
+                    const neighborId = grid[ny][nx];
+                    if (neighborId !== null && currentId !== neighborId) {
+                        adjacency.get(currentId)?.add(neighborId);
+                        adjacency.get(neighborId)?.add(currentId);
+                    }
                 }
-            }
+            });
         }
     }
 
-    // Creating religion layer
-    console.log("Layering Religions...");
-    world.religionGrid = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(null));
-    usedNames.add("Pagan"); // default name for local religions
-    world.religions = [{ id: 0, name: "Pagan", color: `hsl(${rand()*360}, 30%, 50%)` }];
-    let nextReligionId = 1;
+    // Generate a spread of contrasting colors
+    const colors = [];
+    let hue = rand() * 360;
+    for (let i = 0; i < items.length * 2; i++) {
+        colors.push(`hsl(${Math.floor(hue)}, 70%, 65%)`);
+        hue = (hue + 137.5) % 360; // Use the golden angle for good color distribution
+    }
 
-    // Determine center of organized religion on highest dev county 
-    const religionHearths = [];
-    const majorCultureIds = world.cultures.slice(0, numMajorCultures).map(c => c.id);
+    // Assign colors, ensuring neighbors get different ones
+    const colorAssignments = new Map();
+    const sortedItems = items.sort((a, b) => (adjacency.get(b.id)?.size || 0) - (adjacency.get(a.id)?.size || 0));
     
-    majorCultureIds.forEach(cultureId => {
-        let bestCounty = null;
-        let maxDev = -1;
-        world.counties.forEach(county => {
-            const countyCultureId = world.cultureGrid[Math.floor(county.capitalSeed.y)][Math.floor(county.capitalSeed.x)];
-            if (countyCultureId === cultureId && county.development > maxDev) {
-                maxDev = county.development;
-                bestCounty = county;
+    for (const item of sortedItems) {
+        const neighborColors = new Set();
+        adjacency.get(item.id)?.forEach(neighborId => {
+            if (colorAssignments.has(neighborId)) {
+                neighborColors.add(colorAssignments.get(neighborId));
             }
         });
 
+        let assignedColor = colors.find(c => !neighborColors.has(c));
+        if (!assignedColor) { // Fallback just in case
+            assignedColor = `hsl(${Math.floor(rand() * 360)}, 70%, 65%)`;
+        }
+        
+        colorAssignments.set(item.id, assignedColor);
+        item.color = assignedColor;
+    }
+}
+
+function generateSociology(rand, usedNames) {
+    // Establish Culture Hearths and assign a culture to every county
+    const cultureHearths = [];
+    const numCultures = 15 + Math.floor(rand() * 10);
+    world.cultures = [];
+    for (let i = 0; i < numCultures; i++) {
+        let hearthTile;
+        do { hearthTile = world.tiles[Math.floor(rand() * world.tiles.length)]; } while (hearthTile.biome.cost >= 1000);
+        cultureHearths.push({ x: hearthTile.x, y: hearthTile.y, id: i });
+        world.cultures.push({ id: i, name: randomName(rand, usedNames), color: '' });
+    }
+
+    world.counties.forEach(county => {
+        if (county.tiles.size === 0) return;
+        let centerX = 0, centerY = 0;
+        county.tiles.forEach(idx => { centerX += world.tiles[idx].x; centerY += world.tiles[idx].y; });
+        centerX /= county.tiles.size; centerY /= county.tiles.size;
+
+        let closest = cultureHearths.reduce((a, b) => Math.hypot(centerX - a.x, centerY - a.y) < Math.hypot(centerX - b.x, centerY - b.y) ? a : b);
+        county.culture = closest.id;
+    });
+
+    // Establish Religions based on the most dominant cultures and county development
+    const cultureCountyCount = new Map();
+    world.counties.forEach(c => c.culture !== undefined && cultureCountyCount.set(c.culture, (cultureCountyCount.get(c.culture) || 0) + 1));
+    const majorCultureIds = [...cultureCountyCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
+
+    world.religions = [{ id: 0, name: "Folk Religion", color: '' }]; // ID 0 is now "Folk Religion"
+    const religionHearths = [];
+    let nextReligionId = 1;
+
+    majorCultureIds.forEach(cultureId => {
+        const bestCounty = [...world.counties.values()].filter(c => c.culture === cultureId).sort((a, b) => b.development - a.development)[0];
         if (bestCounty) {
-            const religionName = randomName(rand, usedNames);
-            world.religions.push({ id: nextReligionId, name: religionName, color: `hsl(${rand()*360}, 70%, 70%)` });
-            religionHearths.push({ 
-                x: Math.floor(bestCounty.capitalSeed.x), 
-                y: Math.floor(bestCounty.capitalSeed.y), 
-                id: nextReligionId 
-            });
+            religionHearths.push({ id: nextReligionId, countyId: bestCounty.id });
+            world.religions.push({ id: nextReligionId, name: `The Way of ${randomName(rand, usedNames)}`, color: '' });
             nextReligionId++;
         }
     });
 
-    // Spread organized religion
-    const religionCosts = Array(GRID_HEIGHT).fill(null).map(() => Array(GRID_WIDTH).fill(Infinity));
-    const religionFrontier = [];
-    
-    religionHearths.forEach(hearth => {
-        religionCosts[hearth.y][hearth.x] = 0;
-        world.religionGrid[hearth.y][hearth.x] = hearth.id;
-        religionFrontier.push({ x: hearth.x, y: hearth.y, cost: 0 });
+    // Assign a religion to each county with resistance factors
+    world.counties.forEach(county => {
+        if (county.tiles.size === 0 || county.culture === undefined) return;
+        const countyCapital = county.capitalSeed;
+        let bestReligion = { id: 0, score: 50 }; // Base score to stay Pagan/Folk
+
+        religionHearths.forEach(hearth => {
+            const hearthCapital = world.counties.get(hearth.countyId).capitalSeed;
+            const distance = Math.hypot(countyCapital.x - hearthCapital.x, countyCapital.y - hearthCapital.y);
+            
+            // Conversion is less effective over long distances
+            let score = 100 - (distance / (GRID_WIDTH / 3) * 100);
+
+            // Terrain and low development provide "conversion resistance"
+            const avgBiomeCost = [...county.tiles].reduce((sum, id) => sum + world.tiles[id].biome.cost, 0) / county.tiles.size;
+            if (avgBiomeCost > 10) score -= 20; // Mountains/Jungle resist conversion
+            if (county.development < 5) score -= 15; // Low dev areas are more traditional
+
+            if (score > bestReligion.score) {
+                bestReligion = { id: hearth.id, score: score };
+            }
+        });
+        county.religion = bestReligion.id;
     });
 
-    while (religionFrontier.length > 0) {
-        religionFrontier.sort((a, b) => b.cost - a.cost);
-        const current = religionFrontier.pop();
-        const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-        for (const [dx, dy] of neighbors) {
-            const nx = current.x + dx, ny = current.y + dy;
-            if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
-                const neighborTile = world.tiles[ny * GRID_WIDTH + nx];
-                if(neighborTile.biome === BIOMES.DEEP_OCEAN) continue;
-                
-                // Cost of spread for religion lower than culture
-                const newCost = current.cost + 1 + (neighborTile.biome.cost / 2);
-
-                if (newCost < religionCosts[ny][nx]) {
-                    religionCosts[ny][nx] = newCost;
-                    world.religionGrid[ny][nx] = world.religionGrid[current.y][current.x];
-                    religionFrontier.push({ x: nx, y: ny, cost: newCost });
+    // Populate the visual grids based on the final county data
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            const countyId = world.countyGrid[y][x];
+            if (countyId !== null) {
+                const county = world.counties.get(countyId);
+                if (county) {
+                    world.cultureGrid[y][x] = county.culture;
+                    world.religionGrid[y][x] = county.religion;
                 }
             }
         }
     }
 
-    // Pagan for area with no organized religion
-    for (let y = 0; y < GRID_HEIGHT; y++) {
-        for (let x = 0; x < GRID_WIDTH; x++) {
-            const tile = world.tiles[y * GRID_WIDTH + x];
-            if (tile.biome.cost < 1000 && world.religionGrid[y][x] === null) {
-                world.religionGrid[y][x] = 0; // ID 0 for Pagan
-            }
-        }
-    }
-
-    // Determine culture and religion capital city
+    // Assign culture/religion to nation capitals for the info panel
     world.nations.forEach(nation => {
         if (nation.capital) {
-            nation.culture = world.cultureGrid[nation.capital.y][nation.capital.x];
-            nation.religion = world.religionGrid[nation.capital.y][nation.capital.x];
+            const capCountyId = world.countyGrid[nation.capital.y][nation.capital.x];
+            if (capCountyId !== null) {
+                const capCounty = world.counties.get(capCountyId);
+                if(capCounty) {
+                    nation.culture = capCounty.culture;
+                    nation.religion = capCounty.religion;
+                }
+            }
         }
     });
 }
+
 
 // Main worker listener
 self.onmessage = (e) => {
@@ -887,6 +880,13 @@ self.onmessage = (e) => {
         
         post("14. Coloring Nations...");
         colorNations(rand);
+        
+        post("15. Coloring Cultures...");
+        colorSociology(rand, 'cultures', world.cultureGrid);
+        
+        post("16. Coloring Religions...");
+        colorSociology(rand, 'religions', world.religionGrid);
+
 
         // Convert Maps and Sets to Arrays for safe cloning
         world.nations = Array.from(world.nations.entries());
