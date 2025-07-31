@@ -1,5 +1,5 @@
 /* Contains shared utility functions used across the application,
-such as noise generation and procedural name creation.*/
+such as noise generation and procedural name creation*/
 
 import { nameParts } from './config.js';
 
@@ -27,9 +27,9 @@ export function createSeededRandom(seed) {
     }
 }
 
-/**A simple Perlin/Simplex-like noise generator.
-@param {function(): number} rand - The seeded random function.
-@returns {function(number, number): number} A 2D noise function.*/
+/**A simple Perlin/Simplex-like noise generator
+@param {function(): number} rand The seeded random function
+@returns {function(number, number): number} A 2D noise function*/
 
 export function SimpleNoise(rand) {
     const p = Array.from({length: 256}, (_, i) => i);
@@ -55,7 +55,7 @@ export function SimpleNoise(rand) {
     };
 }
 
-/**Generates a random procedural name.
+/**Generates a random procedural name
 @param {function(): number} rand The seeded random function
 @param {Set<string>} usedNames A set of already used names to ensure uniqueness
 @returns {string} A unique, procedurally generated name*/
@@ -90,14 +90,13 @@ export function randomName(rand, usedNames) {
     return name;
 }
 
-/**
- * Finds the "pole of inaccessibility" for a set of tiles using a distance transform (BFS).
- * This finds the point within a territory that is furthest from its border.
- * @param {Set<number>} tileIndices - A set of tile indices belonging to the territory.
- * @param {number} gridWidth - The width of the world grid.
- * @param {number} gridHeight - The height of the world grid.
- * @returns {{x: number, y: number}} The coordinates for the best label position.
- */
+/**Finds the "pole of inaccessibility" for a set of tiles using a distance transform (BFS)
+ * This finds the point within a territory that is furthest from its border
+ * @param {Set<number>} tileIndices A set of tile indices belonging to the territory
+ * @param {number} gridWidth The width of the world grid
+ * @param {number} gridHeight The height of the world grid
+ * @returns {{x: number, y: number}} The coordinates for the best label position*/
+
 export function findPoleOfInaccessibility(tileIndices, gridWidth, gridHeight) {
     if (!tileIndices || tileIndices.size === 0) {
         return { x: 0, y: 0 }; // Fallback
@@ -106,7 +105,7 @@ export function findPoleOfInaccessibility(tileIndices, gridWidth, gridHeight) {
     const distances = new Map();
     const queue = [];
 
-    // 1. Identify all border tiles and initialize the queue
+    // Identify all border tiles and initialize the queue
     tileIndices.forEach(idx => {
         const x = idx % gridWidth;
         const y = Math.floor(idx / gridWidth);
@@ -136,7 +135,7 @@ export function findPoleOfInaccessibility(tileIndices, gridWidth, gridHeight) {
         }
     });
 
-    // 2. Perform Breadth-First Search (BFS) to calculate distance from the border
+    // Perform Breadth-First Search (BFS) to calculate distance from the border
     let head = 0;
     while (head < queue.length) {
         const currentIdx = queue[head++];
@@ -159,7 +158,7 @@ export function findPoleOfInaccessibility(tileIndices, gridWidth, gridHeight) {
         }
     }
 
-    // 3. Find the tile with the maximum distance
+    // Find the tile with the maximum distance
     let maxDist = -1;
     let bestIdx = queue[0] || tileIndices.values().next().value; // Fallback to first tile
 

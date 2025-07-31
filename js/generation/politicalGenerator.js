@@ -291,10 +291,9 @@ function fixExclaves(world) {
     });
 }
 
-/**
- * Renames child entities if they are the only child of their parent.
- * @param {object} world - The world object.
- */
+/**Renames child entities if they are the only child of their parent
+ * @param {object} world The world object*/
+
 function applyLogicalNaming(world) {
     // Nations -> Provinces
     world.nations.forEach(nation => {

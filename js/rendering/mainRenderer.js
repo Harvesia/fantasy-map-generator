@@ -1,4 +1,4 @@
-/*The main rendering engine. Handles the animation loop, drawing layers
+/*The main rendering engine, handles the animation loop, drawing layers
 from offscreen canvases, and managing map modes*/
 
 import { viewport, world, selection, resetSelection } from '../core/state.js';
@@ -21,14 +21,13 @@ export let renderLayers = {
     religion: null,
 };
 
-/* Creates the static, pre-rendered layers on offscreen canvases.
-This is a major optimization, as these layers don't need to be redrawn every frame.*/
+/* Creates the static, pre-rendered layers on offscreen canvases
+This is a major optimization, as these layers don't need to be redrawn every frame*/
 
 export function createRenderLayers() {
     const width = Config.GRID_WIDTH * Config.TILE_SIZE;
     const height = Config.GRID_HEIGHT * Config.TILE_SIZE;
 
-    // FIX: Force regeneration of terrain layer for new worlds
     if (world.tiles && world.tiles.length > 0) {
         renderLayers.terrain = new OffscreenCanvas(width, height);
         const terrainCtx = renderLayers.terrain.getContext('2d');
@@ -38,14 +37,13 @@ export function createRenderLayers() {
         }
     }
 
-    // Map Mode Layers are regenerated when mode changes or selection requires it
     if(world.nations) renderLayers.political = renderPoliticalMode();
     if(world.counties) renderLayers.development = renderDevelopmentMode();
     if(world.cultures) renderLayers.culture = renderCultureMode();
     if(world.religions) renderLayers.religion = renderReligionMode();
 }
 
-//Main render loop. Draws the appropriate layers to the main canvas.
+//Main render loop, draws the appropriate layers to the main canvas
 function drawFrame() {
     try {
         if (!world.tiles || world.tiles.length === 0) return;
@@ -67,7 +65,6 @@ function drawFrame() {
         const viewRight = viewport.x + canvas.width / viewport.zoom;
         const viewBottom = viewport.y + canvas.height / viewport.zoom;
 
-        // --- Draw Layers in Order ---
         if (renderLayers.terrain) ctx.drawImage(renderLayers.terrain, 0, 0);
 
         if (currentMapMode !== 'physical' && renderLayers[currentMapMode]) {
@@ -121,13 +118,14 @@ export function startRenderLoop() {
 }
 
 /**Sets the current map mode and triggers a re-render
-@param {string} mode - The new map mode ('political', 'development', etc.)*/
+@param {string} mode The new map mode ('political', 'development', etc)*/
 
 export function setMapMode(mode) {
+    document.querySelectorAll('.map-mode-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`${mode}Button`).classList.add('active');
+    
     resetSelection(false);
     currentMapMode = mode;
-    document.querySelectorAll('.map-modes button').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(`${mode}Button`).classList.add('active');
     createRenderLayers();
     requestRender();
 }

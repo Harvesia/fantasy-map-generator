@@ -1,17 +1,133 @@
 /* Sets up all event listeners for user interaction, such as mouse clicks,
-panning, zooming, and keyboard controls.*/
+panning, zooming, and keyboard controls*/
 
 import { viewport, world, selection, resetSelection, clampViewport, generateAndRenderWorld } from './core/state.js';
 import * as Config from './core/config.js';
 import { requestRender, currentMapMode, setMapMode, createRenderLayers } from './rendering/mainRenderer.js';
 
 const canvas = document.getElementById("map");
-const tileInfo = document.getElementById("tileInfo");
+
+// Panels
+const countyPanel = document.getElementById('county-panel');
+const provincePanel = document.getElementById('province-panel');
+const nationPanel = document.getElementById('nation-panel');
+const culturePanel = document.getElementById('culture-panel');
+const religionPanel = document.getElementById('religion-panel');
+const allPanels = [countyPanel, provincePanel, nationPanel, culturePanel, religionPanel];
 
 let isPanning = false;
-let panStart = { x: 0, y: 0 };
-let lastMousePos = { x: 0, y: 0 };
+let panStartPos = { x: 0, y: 0 };
 const keyState = {};
+
+function hideAllPanels() {
+    allPanels.forEach(p => p.classList.add('hidden'));
+}
+
+function showCountyPanel(countyId) {
+    const county = world.counties.get(countyId);
+    const province = world.provinces.get(county.parentId);
+    const cultureGroup = world.cultures[county.culture];
+    const subCulture = world.subCultures[county.subCulture];
+    const religion = world.religions[county.religion];
+
+    document.getElementById('county-name').textContent = county.name;
+    document.getElementById('county-province-name').textContent = province.name;
+    document.getElementById('county-dev').textContent = county.development;
+    document.getElementById('county-biome').textContent = world.tiles[county.tiles.values().next().value].biome.name;
+    
+    if (cultureGroup.isGroup) {
+        document.getElementById('county-culture').textContent = `${subCulture.name} (${cultureGroup.name})`;
+    } else {
+        document.getElementById('county-culture').textContent = cultureGroup.name;
+    }
+    
+    document.getElementById('county-religion').textContent = religion.name;
+    
+    hideAllPanels();
+    countyPanel.classList.remove('hidden');
+}
+
+function showProvincePanel(provinceId) {
+    const province = world.provinces.get(provinceId);
+    const nation = world.nations.get(province.parentId);
+
+    document.getElementById('province-name').textContent = province.name;
+    document.getElementById('province-nation-name').textContent = nation.name;
+    document.getElementById('province-dev').textContent = province.development;
+
+    hideAllPanels();
+    provincePanel.classList.remove('hidden');
+}
+
+function showNationPanel(nationId) {
+    const nation = world.nations.get(nationId);
+    document.getElementById('nation-name').textContent = nation.name;
+    document.getElementById('nation-power').textContent = nation.power.toFixed(0);
+
+    const suzerainEl = document.getElementById('nation-suzerain');
+    if (nation.suzerain !== null && world.nations.has(nation.suzerain)) {
+        suzerainEl.textContent = world.nations.get(nation.suzerain).name;
+    } else {
+        suzerainEl.textContent = "None";
+    }
+
+    const lists = {
+        'nation-allies': nation.allies,
+        'nation-vassals': nation.vassals,
+        'nation-atWarWith': nation.atWarWith
+    };
+
+    for (const [listId, nationIds] of Object.entries(lists)) {
+        const ul = document.getElementById(listId);
+        ul.innerHTML = '';
+        if (nationIds.size > 0) {
+            nationIds.forEach(id => {
+                const otherNation = world.nations.get(id);
+                if (otherNation) {
+                    const li = document.createElement('li');
+                    li.textContent = otherNation.name;
+                    ul.appendChild(li);
+                }
+            });
+        } else {
+            const li = document.createElement('li');
+            li.textContent = 'None';
+            li.style.fontStyle = 'italic';
+            li.style.color = '#888';
+            ul.appendChild(li);
+        }
+    }
+
+    hideAllPanels();
+    nationPanel.classList.remove('hidden');
+}
+
+function showCulturePanel(cultureGroupId) {
+    const cultureGroup = world.cultures.find(cg => cg.id === cultureGroupId);
+    document.getElementById('culture-group-name').textContent = cultureGroup.name;
+    
+    const subCultureList = document.getElementById('subculture-list');
+    subCultureList.innerHTML = '';
+    const subCultures = world.subCultures.filter(sc => sc.parentCultureId === cultureGroupId);
+    subCultures.forEach(sc => {
+        const li = document.createElement('li');
+        li.textContent = sc.name;
+        subCultureList.appendChild(li);
+    });
+
+    hideAllPanels();
+    culturePanel.classList.remove('hidden');
+}
+
+function showReligionPanel(religionId) {
+    const religion = world.religions.find(r => r.id === religionId);
+    document.getElementById('religion-name').textContent = religion.name;
+    document.getElementById('religion-type').textContent = religion.type;
+
+    hideAllPanels();
+    religionPanel.classList.remove('hidden');
+}
+
 
 export function setupEventListeners() {
     // UI Buttons
@@ -26,42 +142,51 @@ export function setupEventListeners() {
         if (world.nations && world.nations.size > 0) {
             selection.nationId = Array.from(world.nations.values()).sort((a,b) => b.power - a.power)[0].id;
             selection.level = 1;
+            showNationPanel(selection.nationId);
             requestRender();
         }
     };
-    document.getElementById('controls-header').onclick = () => {
-        const controls = document.getElementById('controls');
-        const button = document.getElementById('minimizeButton');
-        controls.classList.toggle('minimized');
-        button.textContent = controls.classList.contains('minimized') ? '+' : '-';
-    };
+    
+    // Panel Close Buttons
+    allPanels.forEach(panel => {
+        panel.querySelector('.close-btn').onclick = () => {
+            panel.classList.add('hidden');
+            resetSelection();
+        };
+    });
 
     // Canvas Mouse Listeners
-    canvas.addEventListener("click", handleCanvasClick);
+    let clickStartPosition = { x: 0, y: 0 };
     canvas.addEventListener('mousedown', (e) => {
-        isPanning = true;
-        panStart = { x: e.clientX, y: e.clientY };
-        lastMousePos = { x: e.clientX, y: e.clientY };
-        canvas.style.cursor = 'grabbing';
+        isPanning = false;
+        clickStartPosition = { x: e.clientX, y: e.clientY };
+        panStartPos = { x: e.clientX, y: e.clientY };
     });
+
     canvas.addEventListener('mousemove', (e) => {
-        if (!isPanning) return;
-        const dx = e.clientX - lastMousePos.x;
-        const dy = e.clientY - lastMousePos.y;
-        viewport.x -= dx / viewport.zoom;
-        viewport.y -= dy / viewport.zoom;
-        lastMousePos = { x: e.clientX, y: e.clientY };
-        clampViewport();
-        requestRender();
+        if (e.buttons === 1) {
+            const dx = e.clientX - clickStartPosition.x;
+            const dy = e.clientY - clickStartPosition.y;
+            if (Math.hypot(dx, dy) > 5) isPanning = true;
+            
+            if (isPanning) {
+                canvas.style.cursor = 'grabbing';
+                viewport.x -= (e.clientX - panStartPos.x) / viewport.zoom;
+                viewport.y -= (e.clientY - panStartPos.y) / viewport.zoom;
+                panStartPos = { x: e.clientX, y: e.clientY };
+                clampViewport();
+                requestRender();
+            }
+        }
     });
-    canvas.addEventListener('mouseup', () => {
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (!isPanning) handleCanvasClick(e);
         isPanning = false;
         canvas.style.cursor = 'pointer';
     });
-    canvas.addEventListener('mouseleave', () => {
-        isPanning = false;
-        canvas.style.cursor = 'pointer';
-    });
+
+    canvas.addEventListener('mouseleave', () => { isPanning = false; canvas.style.cursor = 'pointer'; });
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -86,9 +211,7 @@ export function setupEventListeners() {
 
 function handleCanvasClick(e) {
     if (!world.tiles || world.tiles.length === 0) return;
-    const dx = e.clientX - panStart.x;
-    const dy = e.clientY - panStart.y;
-    if (Math.hypot(dx, dy) > 5) return;
+    
     const rect = canvas.getBoundingClientRect();
     const worldX = (e.clientX - rect.left) / viewport.zoom + viewport.x;
     const worldY = (e.clientY - rect.top) / viewport.zoom + viewport.y;
@@ -98,104 +221,78 @@ function handleCanvasClick(e) {
 
     const countyId = world.countyGrid[y][x];
     if (countyId === null) {
+        hideAllPanels();
         resetSelection();
-        createRenderLayers(); // Re-render base layers
-        requestRender();
         return;
     }
     const county = world.counties.get(countyId);
 
+    // Mode-Specific Logic
+
     if (currentMapMode === 'culture') {
-        const clickedCultureGroup = county.culture;
+        const cultureGroup = world.cultures[county.culture];
         const clickedSubCulture = county.subCulture;
 
-        if (selection.subCultureId === clickedSubCulture) {
-            // Third click on the same sub-culture: deselect all
-            resetSelection(false);
-        } else if (selection.cultureGroupId === clickedCultureGroup) {
-            // Second click within the same group: select the sub-culture
+        if (!cultureGroup.isGroup) {
+            // It's a monolithic culture, not a group
+            selection.cultureGroupId = county.culture;
             selection.subCultureId = clickedSubCulture;
+            showCulturePanel(county.culture);
         } else {
-            // First click or click on a new group: select the culture group
-            resetSelection(false);
-            selection.cultureGroupId = clickedCultureGroup;
+            // It's a culture group with multiple subcultures
+            if (selection.subCultureId === clickedSubCulture) {
+                resetSelection(false);
+                hideAllPanels();
+            } else if (selection.cultureGroupId === county.culture) {
+                selection.subCultureId = clickedSubCulture;
+                hideAllPanels();
+            } else {
+                resetSelection(false);
+                selection.cultureGroupId = county.culture;
+                showCulturePanel(county.culture);
+            }
         }
-        createRenderLayers(); // Culture layer needs to be redrawn based on selection
+        createRenderLayers();
     } else if (currentMapMode === 'religion') {
         resetSelection(false);
         const religionId = county.religion;
         selection.religionId = (selection.religionId === religionId) ? null : religionId;
-    } else {
-        // Handle political and other map modes
-        if (selection.cultureGroupId !== null || selection.religionId !== null) {
-            resetSelection(false); // Clear sociology selections if switching to political
-        }
-        const clickedProvinceId = world.provinceGrid[y][x];
-        const clickedNationId = world.nationGrid[y][x];
-
-        if (currentMapMode === 'diplomatic') {
-            selection.nationId = clickedNationId;
-            selection.level = 1;
+        if (selection.religionId !== null) {
+            showReligionPanel(religionId);
         } else {
-            if (selection.countyId === countyId) {
-                selection.level = (selection.level + 1) % 4;
-            } else {
-                selection.level = 1;
-            }
+            hideAllPanels();
+        }
+    } else if (currentMapMode === 'diplomatic') {
+        resetSelection(false);
+        const provinceId = county.parentId;
+        const nationId = world.provinces.get(provinceId).parentId;
+        selection.level = 1;
+        selection.nationId = nationId;
+        showNationPanel(nationId);
+    } else { // Political, Physical, Development
+        resetSelection(false);
+        const provinceId = county.parentId;
+        const nationId = world.provinces.get(provinceId).parentId;
+
+        if (currentMapMode === 'development') {
+            selection.level = 3; // Force county view in dev mode
+        } else if (selection.countyId === countyId) {
+            selection.level = (selection.level % 3) + 1;
+        } else {
+            selection.level = 3;
         }
         
-        if (selection.level === 0) {
-            resetSelection(false);
-        } else {
-            selection.nationId = clickedNationId;
-            selection.provinceId = clickedProvinceId;
-            selection.countyId = countyId;
-        }
+        selection.nationId = nationId;
+        selection.provinceId = provinceId;
+        selection.countyId = countyId;
+
+        if (selection.level === 3) showCountyPanel(countyId);
+        else if (selection.level === 2) showProvincePanel(provinceId);
+        else if (selection.level === 1) showNationPanel(nationId);
     }
     
     requestRender();
-    updateTileInfo(x, y);
 }
-
-export function updateTileInfo(x, y) {
-    const tile = world.tiles[y * Config.GRID_WIDTH + x];
-    const countyId = world.countyGrid[y][x];
-    if (countyId === null) {
-        tileInfo.innerHTML = `<b>Coords:</b> (${x}, ${y})<br><b>Biome:</b> ${tile.biome.name}`;
-        return;
-    }
-
-    const county = world.counties.get(countyId);
-    const province = world.provinces.get(county.parentId);
-    const nation = world.nations.get(province.parentId);
-    const cultureGroup = world.cultures[county.culture];
-    const subCulture = world.subCultures[county.subCulture];
-    const religion = world.religions[county.religion];
-
-    let infoHTML = `<b>Coords:</b> (${x}, ${y})<br><b>Biome:</b> ${tile.biome.name}`;
-    
-    if (subCulture && cultureGroup) {
-        infoHTML += `<br><b>Culture:</b> ${subCulture.name} (${cultureGroup.name})`;
-    } else if (cultureGroup) {
-        infoHTML += `<br><b>Culture Group:</b> ${cultureGroup.name}`;
-    }
-
-    if(religion) infoHTML += `<br><b>Religion:</b> ${religion.name}`;
-
-    if (nation) {
-        infoHTML += `<hr style="border-color: #444; margin: 5px 0;">
-                    <b>Nation:</b> ${nation.name} (Power: ${nation.power.toFixed(0)})<br>
-                    <b>Province:</b> ${province?.name || 'N/A'}<br>
-                    <b>County:</b> ${county?.name || 'N/A'} (Dev: ${county?.development || 0})`;
-        
-        if(nation.suzerain !== null && world.nations.has(nation.suzerain)) infoHTML += `<br><b>Suzerain:</b> ${world.nations.get(nation.suzerain).name}`;
-        if(nation.vassals.size > 0) infoHTML += `<br><b>Vassals:</b> ${Array.from(nation.vassals).map(id => world.nations.has(id) ? world.nations.get(id).name : '').filter(n => n).join(', ')}`;
-        if(nation.allies.size > 0) infoHTML += `<br><b>Allies:</b> ${Array.from(nation.allies).map(id => world.nations.has(id) ? world.nations.get(id).name : '').filter(n => n).join(', ')}`;
-        if(nation.atWarWith.size > 0) infoHTML += `<br><b style="color: #ff4444;">At War With:</b> ${Array.from(nation.atWarWith).map(id => world.nations.has(id) ? world.nations.get(id).name : '').filter(n => n).join(', ')}`;
-    }
-    tileInfo.innerHTML = infoHTML;
-}
-
 
 function startKeyboardPanLoop() {
     let lastTime = 0;

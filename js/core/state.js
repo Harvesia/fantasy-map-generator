@@ -4,7 +4,6 @@ by communicating with the web worker*/
 
 import { GRID_WIDTH, GRID_HEIGHT, TILE_SIZE } from './config.js';
 import { requestRender, createRenderLayers, setMapMode } from '../rendering/mainRenderer.js';
-import { updateTileInfo } from '../listeners.js';
 
 // DOM Elements
 const loadingStatus = document.getElementById("loadingStatus");
@@ -20,9 +19,8 @@ export let selection = {
     provinceId: null,
     countyId: null,
     religionId: null,
-    // New multi-level selection for cultures
-    cultureGroupId: null, // The ID of the parent culture group
-    subCultureId: null,   // The ID of the specific sub-culture
+    cultureGroupId: null,
+    subCultureId: null,
 };
 
 // Create the generation worker
@@ -34,7 +32,6 @@ generationWorker.onmessage = (e) => {
     if (type === 'progress') {
         loadingStatus.textContent = payload.status;
     } else if (type === 'complete') {
-        // Reconstruct the world object from the cloned arrays
         world = payload.world;
         world.nations = new Map(world.nations);
         world.provinces = new Map(world.provinces);
@@ -55,11 +52,10 @@ generationWorker.onmessage = (e) => {
     
         loadingStatus.textContent = "Creating render layers...";
         createRenderLayers();
-        fitMapToScreen();
+        fitMapToScreen(); // Fit the new map to the screen
         setMapMode('political');
         loadingStatus.textContent = "Generation Complete!";
         generateButton.disabled = false;
-        updateTileInfo(Math.floor(GRID_WIDTH / 2), Math.floor(GRID_HEIGHT / 2));
     }
 };
 
@@ -77,7 +73,6 @@ export function generateAndRenderWorld() {
     currentSeedDisplay.textContent = seed;
     document.getElementById('seedInput').value = '';
 
-    // Send generation command to the worker
     generationWorker.postMessage({
         type: 'generate',
         payload: {
@@ -89,7 +84,7 @@ export function generateAndRenderWorld() {
 }
 
 /** Resets the current user selection
-@param {boolean} doRender - Whether to trigger a re-render after resetting*/
+@param {boolean} doRender Whether to trigger a re-render after resetting*/
 
 export function resetSelection(doRender = true) {
     selection.level = 0;
@@ -102,26 +97,38 @@ export function resetSelection(doRender = true) {
     if (doRender) requestRender();
 }
 
-// Adjusts the viewport to fit the entire map on the screen
-
+/** Adjusts the viewport to fit the entire map within the visible screen area*/
 export function fitMapToScreen() {
     const canvas = document.getElementById('map');
+    const topBar = document.getElementById('top-bar');
+    const bottomBar = document.getElementById('bottom-bar');
+    
+    const availableWidth = canvas.clientWidth;
+    const availableHeight = canvas.clientHeight - topBar.offsetHeight - bottomBar.offsetHeight;
+
     const worldWidth = GRID_WIDTH * TILE_SIZE;
     const worldHeight = GRID_HEIGHT * TILE_SIZE;
-    const zoomX = canvas.width / worldWidth;
-    const zoomY = canvas.height / worldHeight;
-    viewport.zoom = Math.min(zoomX, zoomY);
-    viewport.MIN_ZOOM = viewport.zoom * 0.95;
+
+    const zoomX = availableWidth / worldWidth;
+    const zoomY = availableHeight / worldHeight;
     
-    const viewWidth = canvas.width / viewport.zoom;
-    const viewHeight = canvas.height / viewport.zoom;
+    viewport.zoom = Math.min(zoomX, zoomY) * 0.95;
+    viewport.MIN_ZOOM = viewport.zoom * 0.5;
+
+    const viewWidth = canvas.clientWidth / viewport.zoom;
+    const viewHeight = canvas.clientHeight / viewport.zoom;
+
     viewport.x = (worldWidth - viewWidth) / 2;
-    viewport.y = (worldHeight - viewHeight) / 2;
+
+    const visibleCenterY_screen = topBar.offsetHeight + (availableHeight / 2);
+    const worldCenterY_world = worldHeight / 2;
+    viewport.y = worldCenterY_world - (visibleCenterY_screen / viewport.zoom);
+
     clampViewport();
 }
 
-// Clamps the viewport to stay within the world boundaries
 
+// Clamps the viewport to stay within the world boundaries
 export function clampViewport() {
     const canvas = document.getElementById('map');
     const worldWidth = GRID_WIDTH * TILE_SIZE;

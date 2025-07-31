@@ -1,6 +1,6 @@
-/* The main entry point for the application.
+/* The main entry point for the application
 Its primary responsibilities are to initialize the canvas,
-set up event listeners, and trigger the initial world generation.*/
+set up event listeners, and trigger the initial world generation*/
 
 import { generateAndRenderWorld } from './core/state.js';
 import { setupEventListeners } from './listeners.js';

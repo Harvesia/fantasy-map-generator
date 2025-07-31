@@ -1,6 +1,6 @@
 /* Handles drawing dynamic elements on top of the map layers
 This includes borders, labels, and selection highlights, which need
-to be redrawn frequently as the user interacts with the map */
+to be redrawn frequently as the user interacts with the map*/
 
 import { world, viewport, selection } from '../core/state.js';
 import * as Config from '../core/config.js';
@@ -148,7 +148,6 @@ function drawLabels(ctx, entities, viewLeft, viewRight, viewTop, viewBottom) {
                     h: 20 / viewport.zoom
                 };
 
-                // Simple collision detection
                 let collision = false;
                 for (const drawn of drawnLabels) {
                     if (labelBox.x < drawn.x + drawn.w && labelBox.x + labelBox.w > drawn.x &&
@@ -176,18 +175,20 @@ export function renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom
 export function renderSociologyLabels(ctx, type, viewLeft, viewRight, viewTop, viewBottom) {
     if (type === 'culture') {
         if (selection.cultureGroupId !== null) {
-            const subCulturesInGroup = world.subCultures.filter(sc => sc.parentCultureId === selection.cultureGroupId);
-            drawLabels(ctx, subCulturesInGroup, viewLeft, viewRight, viewTop, viewBottom);
+            const cultureGroup = world.cultures[selection.cultureGroupId];
+            if (cultureGroup && cultureGroup.isGroup) {
+                const subCulturesInGroup = world.subCultures.filter(sc => sc.parentCultureId === selection.cultureGroupId);
+                drawLabels(ctx, subCulturesInGroup, viewLeft, viewRight, viewTop, viewBottom);
+            } else if (cultureGroup) {
+                 drawLabels(ctx, [cultureGroup], viewLeft, viewRight, viewTop, viewBottom);
+            }
         } else {
             drawLabels(ctx, world.cultures, viewLeft, viewRight, viewTop, viewBottom);
         }
     } else if (type === 'religion') {
-        if (selection.religionId === null) {
-            drawLabels(ctx, world.religions, viewLeft, viewRight, viewTop, viewBottom);
-        }
+        drawLabels(ctx, world.religions, viewLeft, viewRight, viewTop, viewBottom);
     }
 }
-
 
 export function drawDiplomacyLines(ctx) {
     const nations = world.nations;

@@ -1,8 +1,6 @@
-/*
-This script runs in a separate thread as a Web Worker.
+/*This script runs in a separate thread as a Web Worker
 It acts as the main coordinator for the world generation process,
-importing and calling specialized generator modules in sequence.
-*/
+importing and calling specialized generator modules in sequence*/
 
 import { GRID_WIDTH, GRID_HEIGHT, MIN_NATIONS, MAX_NATIONS, MIN_PROVINCES_PER_NATION, MAX_PROVINCES_PER_NATION, MIN_COUNTIES_PER_PROVINCE, MAX_COUNTIES_PER_PROVINCE } from './core/config.js';
 import { createSeededRandom, randomName, findPoleOfInaccessibility } from './core/utils.js';
@@ -12,11 +10,10 @@ import { generateSociology } from './generation/sociologyGenerator.js';
 import { generateDiplomacy } from './generation/diplomacyGenerator.js';
 import { colorNations, colorSociology } from './generation/colorGenerator.js';
 
-/**
- * Calculates and stores the best label position for a collection of entities (nations, cultures, etc.).
- * @param {Map<number, object> | Array<object>} entities - The entities to process.
- * @param {function(object): Set<number>} getTilesFn - A function that returns the tile indices for a given entity.
- */
+/**Calculates and stores the best label position for a collection of entities (nations, cultures, etc)
+ * @param {Map<number, object> | Array<object>} entities The entities to process
+ * @param {function(object): Set<number>} getTilesFn A function that returns the tile indices for a given entity*/
+
 function calculateLabelPositions(entities, getTilesFn) {
     const processEntity = (entity) => {
         const tiles = getTilesFn(entity);
@@ -78,7 +75,7 @@ self.onmessage = (e) => {
 
         const post = (status) => self.postMessage({ type: 'progress', payload: { status } });
 
-        // --- Generation Sequence ---
+        // Generation Sequence
         post("1. Generating Terrain...");
         generateTerrain(world, rand);
 
@@ -136,7 +133,7 @@ self.onmessage = (e) => {
         colorSociology(world, rand, 'cultures');
         colorSociology(world, rand, 'religions');
         
-        // --- Finalization ---
+        // Finalization
         post("7. Finalizing World Data...");
 
         world.nations = Array.from(world.nations.entries());

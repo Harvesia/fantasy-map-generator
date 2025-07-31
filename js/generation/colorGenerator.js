@@ -1,10 +1,9 @@
 import { GRID_WIDTH, GRID_HEIGHT } from '../core/config.js';
 
-/**
- * Assigns a unique, visually distinct color to each nation.
- * @param {object} world - The world object.
- * @param {function(): number} rand - The seeded random function.
- */
+/**Assigns a unique, visually distinct color to each nation
+ * @param {object} world The world object
+ * @param {function(): number} rand The seeded random function*/
+
 export function colorNations(world, rand) {
     const nations = Array.from(world.nations.values());
     const nationCount = nations.length;
@@ -26,12 +25,11 @@ export function colorNations(world, rand) {
     });
 }
 
-/**
- * Assigns a unique, visually distinct color to each item in a sociology group (cultures or religions).
- * @param {object} world - The world object.
- * @param {function(): number} rand - The seeded random function.
- * @param {string} sociologyType - The type of group to color ('cultures' or 'religions').
- */
+/**Assigns a unique, visually distinct color to each item in a sociology group (cultures or religions)
+ * @param {object} world The world object
+ * @param {function(): number} rand The seeded random function
+ * @param {string} sociologyType The type of group to color ('cultures' or 'religions')*/
+
 export function colorSociology(world, rand, sociologyType) {
     const items = world[sociologyType];
     if (!items || items.length === 0) return;

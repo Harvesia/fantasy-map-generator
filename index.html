@@ -5,36 +5,118 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fantasy Map Generator</title>
     <link rel="stylesheet" href="css/style.css">
-</head><body>
-    <div id="controls">
-        <div id="controls-header" onclick="toggleControls()">
-            <h2>Map Controls</h2>
-            <button id="minimizeButton">-</button>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+    <canvas id="map"></canvas>
+
+    <!-- Top Bar for main controls -->
+    <div id="top-bar">
+        <div class="control-group">
+            <label for="seedInput">Seed:</label>
+            <input type="text" id="seedInput" placeholder="Leave blank for random">
         </div>
-        <div id="controls-content">
-            <div class="control-group">
-                <p style="margin-bottom: 5px;">Current Seed: <b id="currentSeedDisplay" style="color: #4a90e2;">-</b></p>
-                <label for="seedInput">Use Specific Seed (Optional):</label>
-                <input type="text" id="seedInput" placeholder="Leave blank for random">
+        <button id="generateButton">Generate New World</button>
+        <div id="loadingStatus">Ready.</div>
+        <p>Current Seed: <b id="currentSeedDisplay">-</b></p>
+    </div>
+
+    <!-- Bottom Bar for map modes -->
+    <div id="bottom-bar">
+        <button id="physicalButton" class="map-mode-btn active" title="Physical"><i class="fas fa-mountain-sun"></i></button>
+        <button id="politicalButton" class="map-mode-btn" title="Political"><i class="fas fa-flag"></i></button>
+        <button id="developmentButton" class="map-mode-btn" title="Development"><i class="fas fa-city"></i></button>
+        <button id="cultureButton" class="map-mode-btn" title="Culture"><i class="fas fa-users"></i></button>
+        <button id="religionButton" class="map-mode-btn" title="Religion"><i class="fas fa-cross"></i></button>
+        <button id="diplomaticButton" class="map-mode-btn" title="Diplomatic"><i class="fas fa-handshake"></i></button>
+    </div>
+
+    <!-- County Information Panel -->
+    <div id="county-panel" class="info-panel hidden">
+        <div class="panel-header">
+            <h3 id="county-name">County Name</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="panel-subheader">
+            <span id="county-province-name">Province Name</span>
+        </div>
+        <div class="panel-content">
+            <div class="stat-row"><i class="fas fa-city"></i><span>Development:</span><b id="county-dev">0</b></div>
+            <div class="stat-row"><i class="fas fa-mountain-sun"></i><span>Biome:</span><b id="county-biome">Grassland</b></div>
+            <hr>
+            <h4>Demographics</h4>
+            <div class="stat-row"><i class="fas fa-users"></i><span>Culture:</span><b id="county-culture">Culture</b></div>
+            <div class="stat-row"><i class="fas fa-cross"></i><span>Religion:</span><b id="county-religion">Religion</b></div>
+        </div>
+    </div>
+
+    <!-- Province Information Panel -->
+    <div id="province-panel" class="info-panel hidden">
+        <div class="panel-header">
+            <h3 id="province-name">Province Name</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="panel-subheader">
+            <span id="province-nation-name">Nation Name</span>
+        </div>
+        <div class="panel-content">
+            <div class="stat-row"><i class="fas fa-city"></i><span>Total Development:</span><b id="province-dev">0</b></div>
+        </div>
+    </div>
+
+    <!-- Nation Information Panel -->
+    <div id="nation-panel" class="info-panel hidden">
+        <div class="panel-header">
+            <h3 id="nation-name">Nation Name</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="panel-content">
+            <div class="stat-row"><i class="fas fa-fist-raised"></i><span>Total Power:</span><b id="nation-power">0</b></div>
+            <hr>
+            <h4>Diplomacy</h4>
+            <div class="diplomacy-section">
+                <h5><i class="fas fa-handshake"></i> Allies</h5>
+                <ul id="nation-allies"></ul>
             </div>
-            <button id="generateButton">Generate New World</button>
-            
-            <h3>Map Modes</h3>
-            <div class="map-modes">
-                <button id="physicalButton" class="active">Physical</button>
-                <button id="politicalButton">Political</button>
-                <button id="developmentButton">Development</button>
-                <button id="cultureButton">Culture</button>
-                <button id="religionButton">Religion</button>
-                <button id="diplomaticButton">Diplomatic</button>
+            <div class="diplomacy-section">
+                <h5><i class="fas fa-crown"></i> Vassals</h5>
+                <ul id="nation-vassals"></ul>
             </div>
-    
-            <div id="loadingStatus">Ready.</div>
-            <div id="tileInfo">Click to focus on a nation, province, or county.</div>
+             <div class="diplomacy-section">
+                <h5><i class="fas fa-shield-halved"></i> Suzerain</h5>
+                <p id="nation-suzerain">None</p>
+            </div>
+            <div class="diplomacy-section war">
+                <h5><i class="fas fa-swords"></i> At War With</h5>
+                <ul id="nation-atWarWith"></ul>
+            </div>
         </div>
     </div>
     
-    <canvas id="map"></canvas>
+    <!-- Culture Panel -->
+    <div id="culture-panel" class="info-panel hidden">
+        <div class="panel-header">
+            <h3 id="culture-group-name">Culture Group</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="panel-content">
+             <h4>Sub-cultures</h4>
+             <ul id="subculture-list" class="diplomacy-section"></ul>
+        </div>
+    </div>
+
+    <!-- Religion Panel -->
+    <div id="religion-panel" class="info-panel hidden">
+        <div class="panel-header">
+            <h3 id="religion-name">Religion</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="panel-content">
+            <div class="stat-row"><i class="fas fa-globe"></i><span>Type:</span><b id="religion-type">Universalist</b></div>
+        </div>
+    </div>
+
     <script type="module" src="js/main.js"></script>
 </body>
 </html>
