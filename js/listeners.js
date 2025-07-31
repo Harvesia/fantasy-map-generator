@@ -3,7 +3,7 @@ panning, zooming, and keyboard controls.*/
 
 import { viewport, world, selection, resetSelection, clampViewport, generateAndRenderWorld } from './core/state.js';
 import * as Config from './core/config.js';
-import { requestRender, currentMapMode, setMapMode } from './rendering/mainRenderer.js';
+import { requestRender, currentMapMode, setMapMode, createRenderLayers } from './rendering/mainRenderer.js';
 
 const canvas = document.getElementById("map");
 const tileInfo = document.getElementById("tileInfo");
@@ -96,25 +96,40 @@ function handleCanvasClick(e) {
     const y = Math.floor(worldY / Config.TILE_SIZE);
     if (x < 0 || x >= Config.GRID_WIDTH || y < 0 || y >= Config.GRID_HEIGHT) return;
 
-    if (currentMapMode === 'culture' || currentMapMode === 'religion') {
-        resetSelection(false);
-        if (currentMapMode === 'culture') {
-            const cultureId = world.cultureGrid[y][x];
-            selection.cultureId = (selection.cultureId === cultureId) ? null : cultureId;
-        } else {
-            const religionId = world.religionGrid[y][x];
-            selection.religionId = (selection.religionId === religionId) ? null : religionId;
-        }
-    } else {
-        if (currentMapMode === 'development') return; 
-        selection.cultureId = null;
-        selection.religionId = null;
-        const clickedCountyId = world.countyGrid[y][x];
-        if (clickedCountyId === null) {
-            resetSelection();
-            return;
-        }
+    const countyId = world.countyGrid[y][x];
+    if (countyId === null) {
+        resetSelection();
+        createRenderLayers(); // Re-render base layers
+        requestRender();
+        return;
+    }
+    const county = world.counties.get(countyId);
 
+    if (currentMapMode === 'culture') {
+        const clickedCultureGroup = county.culture;
+        const clickedSubCulture = county.subCulture;
+
+        if (selection.subCultureId === clickedSubCulture) {
+            // Third click on the same sub-culture: deselect all
+            resetSelection(false);
+        } else if (selection.cultureGroupId === clickedCultureGroup) {
+            // Second click within the same group: select the sub-culture
+            selection.subCultureId = clickedSubCulture;
+        } else {
+            // First click or click on a new group: select the culture group
+            resetSelection(false);
+            selection.cultureGroupId = clickedCultureGroup;
+        }
+        createRenderLayers(); // Culture layer needs to be redrawn based on selection
+    } else if (currentMapMode === 'religion') {
+        resetSelection(false);
+        const religionId = county.religion;
+        selection.religionId = (selection.religionId === religionId) ? null : religionId;
+    } else {
+        // Handle political and other map modes
+        if (selection.cultureGroupId !== null || selection.religionId !== null) {
+            resetSelection(false); // Clear sociology selections if switching to political
+        }
         const clickedProvinceId = world.provinceGrid[y][x];
         const clickedNationId = world.nationGrid[y][x];
 
@@ -122,7 +137,7 @@ function handleCanvasClick(e) {
             selection.nationId = clickedNationId;
             selection.level = 1;
         } else {
-            if (selection.countyId === clickedCountyId) {
+            if (selection.countyId === countyId) {
                 selection.level = (selection.level + 1) % 4;
             } else {
                 selection.level = 1;
@@ -134,7 +149,7 @@ function handleCanvasClick(e) {
         } else {
             selection.nationId = clickedNationId;
             selection.provinceId = clickedProvinceId;
-            selection.countyId = clickedCountyId;
+            selection.countyId = countyId;
         }
     }
     
@@ -144,22 +159,30 @@ function handleCanvasClick(e) {
 
 export function updateTileInfo(x, y) {
     const tile = world.tiles[y * Config.GRID_WIDTH + x];
-    const nationId = world.nationGrid[y][x];
-    const provinceId = world.provinceGrid[y][x];
     const countyId = world.countyGrid[y][x];
-    const cultureId = world.cultureGrid[y][x];
-    const religionId = world.religionGrid[y][x];
+    if (countyId === null) {
+        tileInfo.innerHTML = `<b>Coords:</b> (${x}, ${y})<br><b>Biome:</b> ${tile.biome.name}`;
+        return;
+    }
+
+    const county = world.counties.get(countyId);
+    const province = world.provinces.get(county.parentId);
+    const nation = world.nations.get(province.parentId);
+    const cultureGroup = world.cultures[county.culture];
+    const subCulture = world.subCultures[county.subCulture];
+    const religion = world.religions[county.religion];
 
     let infoHTML = `<b>Coords:</b> (${x}, ${y})<br><b>Biome:</b> ${tile.biome.name}`;
+    
+    if (subCulture && cultureGroup) {
+        infoHTML += `<br><b>Culture:</b> ${subCulture.name} (${cultureGroup.name})`;
+    } else if (cultureGroup) {
+        infoHTML += `<br><b>Culture Group:</b> ${cultureGroup.name}`;
+    }
 
-    if (cultureId !== null && world.cultures[cultureId]) infoHTML += `<br><b>Culture:</b> ${world.cultures[cultureId].name}`;
-    if (religionId !== null && world.religions[religionId]) infoHTML += `<br><b>Religion:</b> ${world.religions[religionId].name}`;
+    if(religion) infoHTML += `<br><b>Religion:</b> ${religion.name}`;
 
-    if (nationId !== null) {
-        const nation = world.nations.get(nationId);
-        const province = world.provinces.get(provinceId);
-        const county = world.counties.get(countyId);
-
+    if (nation) {
         infoHTML += `<hr style="border-color: #444; margin: 5px 0;">
                     <b>Nation:</b> ${nation.name} (Power: ${nation.power.toFixed(0)})<br>
                     <b>Province:</b> ${province?.name || 'N/A'}<br>

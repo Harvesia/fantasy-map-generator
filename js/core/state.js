@@ -19,13 +19,13 @@ export let selection = {
     nationId: null,
     provinceId: null,
     countyId: null,
-    cultureId: null,
-    religionId: null
+    religionId: null,
+    // New multi-level selection for cultures
+    cultureGroupId: null, // The ID of the parent culture group
+    subCultureId: null,   // The ID of the specific sub-culture
 };
 
-/* Create the generation worker.
-The `{ type: 'module' }` option is removed as the worker is now self-contained.*/
-
+// Create the generation worker
 const generationWorker = new Worker(new URL('../generation_worker.js', import.meta.url), { type: 'module'});
 
 // Handle messages from the worker
@@ -60,34 +60,10 @@ generationWorker.onmessage = (e) => {
         loadingStatus.textContent = "Generation Complete!";
         generateButton.disabled = false;
         updateTileInfo(Math.floor(GRID_WIDTH / 2), Math.floor(GRID_HEIGHT / 2));
-        console.log("1. Worker message 'complete' received.");
-        console.log("2. World object reconstructed. Inspecting maps and sets:", {
-            nations: world.nations instanceof Map,
-            provinces: world.provinces instanceof Map,
-            firstNationAllies: world.nations.values().next().value.allies instanceof Set
-        });
-
-        console.dir(world); 
-    
-        loadingStatus.textContent = "Creating render layers...";
-    
-        console.log("3. Calling createRenderLayers().");
-        createRenderLayers();
-        console.log("4. createRenderLayers() finished.");
-    
-        fitMapToScreen();
-    
-        console.log("5. Calling setMapMode('political').");
-        setMapMode('political');
-        
-        loadingStatus.textContent = "Generation Complete!";
-        generateButton.disabled = false;
-        updateTileInfo(Math.floor(GRID_WIDTH / 2), Math.floor(GRID_HEIGHT / 2));
-        console.log("6. Initialization complete.");
     }
 };
 
-//Starts the world generation process.
+//Starts the world generation process
 
 export function generateAndRenderWorld() {
     generateButton.disabled = true;
@@ -112,20 +88,21 @@ export function generateAndRenderWorld() {
     });
 }
 
-/** Resets the current user selection.
-@param {boolean} doRender - Whether to trigger a re-render after resetting.*/
+/** Resets the current user selection
+@param {boolean} doRender - Whether to trigger a re-render after resetting*/
 
 export function resetSelection(doRender = true) {
     selection.level = 0;
     selection.nationId = null;
     selection.provinceId = null;
     selection.countyId = null;
-    selection.cultureId = null;
     selection.religionId = null;
+    selection.cultureGroupId = null;
+    selection.subCultureId = null;
     if (doRender) requestRender();
 }
 
-// Adjusts the viewport to fit the entire map on the screen.
+// Adjusts the viewport to fit the entire map on the screen
 
 export function fitMapToScreen() {
     const canvas = document.getElementById('map');
@@ -143,7 +120,7 @@ export function fitMapToScreen() {
     clampViewport();
 }
 
-// Clamps the viewport to stay within the world boundaries.
+// Clamps the viewport to stay within the world boundaries
 
 export function clampViewport() {
     const canvas = document.getElementById('map');

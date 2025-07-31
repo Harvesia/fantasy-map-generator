@@ -23,32 +23,28 @@ function drawBorderLine(ctx, x, y, dir, style) {
     ctx.stroke();
 }
 
-export function drawBorders(ctx) {
+export function drawBorders(ctx, currentMapMode) {
     const styles = {
         county: { c: "rgba(0,0,0,0.25)", w: 1 },
         province: { c: "rgba(0,0,0,0.4)", w: 1.5 },
         nation: { c: "rgba(0,0,0,1.0)", w: 3.5 },
-        sociology: { c: "rgba(255,255,255,0.4)", w: 2 }
+        cultureGroup: { c: "rgba(255,255,255,0.6)", w: 3 },
+        subCulture: { c: "rgba(255,255,255,0.3)", w: 1.5 },
     };
 
     const drawGridBorders = (grid, style) => {
+        if (!grid) return;
         for (let y = 0; y < Config.GRID_HEIGHT; y++) {
             for (let x = 0; x < Config.GRID_WIDTH; x++) {
                 const currentId = grid[y][x];
-
-                // Check right neighbor
                 if (x + 1 < Config.GRID_WIDTH) {
                     const rightId = grid[y][x + 1];
-                    // Draw a border if IDs are different, but not if both are water (null)
                     if (currentId !== rightId && (currentId !== null || rightId !== null)) {
                         drawBorderLine(ctx, x, y, 'right', style);
                     }
                 }
-
-                // Check bottom neighbor
                 if (y + 1 < Config.GRID_HEIGHT) {
                     const downId = grid[y + 1][x];
-                    // Draw a border if IDs are different, but not if both are water (null)
                     if (currentId !== downId && (currentId !== null || downId !== null)) {
                         drawBorderLine(ctx, x, y, 'down', style);
                     }
@@ -57,9 +53,18 @@ export function drawBorders(ctx) {
         }
     };
 
-    if (viewport.zoom > 4 || selection.level === 3) drawGridBorders(world.countyGrid, styles.county);
-    if (viewport.zoom > 1.5 || selection.level >= 2) drawGridBorders(world.provinceGrid, styles.province);
-    drawGridBorders(world.nationGrid, styles.nation);
+    if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || selection.level > 0) {
+        if (viewport.zoom > 4 || selection.level === 3) drawGridBorders(world.countyGrid, styles.county);
+        if (viewport.zoom > 1.5 || selection.level >= 2) drawGridBorders(world.provinceGrid, styles.province);
+        drawGridBorders(world.nationGrid, styles.nation);
+    }
+
+    if (currentMapMode === 'culture') {
+        if (selection.cultureGroupId !== null) {
+            drawGridBorders(world.subCultureGrid, styles.subCulture);
+        }
+        drawGridBorders(world.cultureGrid, styles.cultureGroup);
+    }
 }
 
 // highlights
@@ -85,77 +90,104 @@ export function renderFocusHighlight(ctx) {
 }
 
 export function renderSociologyHighlight(ctx, type) {
-    const selectedId = type === 'culture' ? selection.cultureId : selection.religionId;
-    if (selectedId === null) return;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    for (let y = 0; y < Config.GRID_HEIGHT; y++) {
-        for (let x = 0; x < Config.GRID_WIDTH; x++) {
-            const grid = type === 'culture' ? world.cultureGrid : world.religionGrid;
-            const socioId = grid[y][x];
-            if (socioId !== selectedId) {
-                ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+    ctx.globalAlpha = 0.6;
+    if (type === 'culture') {
+        if (selection.subCultureId !== null) {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            for (let y = 0; y < Config.GRID_HEIGHT; y++) {
+                for (let x = 0; x < Config.GRID_WIDTH; x++) {
+                    const county = world.counties.get(world.countyGrid[y][x]);
+                    if (!county || county.subCulture !== selection.subCultureId) {
+                        ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+                    }
+                }
+            }
+        }
+    } else if (type === 'religion') {
+        if (selection.religionId !== null) {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            for (let y = 0; y < Config.GRID_HEIGHT; y++) {
+                for (let x = 0; x < Config.GRID_WIDTH; x++) {
+                    const county = world.counties.get(world.countyGrid[y][x]);
+                    if (!county || county.religion !== selection.religionId) {
+                        ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+                    }
+                }
             }
         }
     }
+    ctx.globalAlpha = 1.0;
 }
+
 
 // labels and lines
 
-export function renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom) {
-    if (viewport.zoom > 0.5) {
-        ctx.font = `bold ${14 / viewport.zoom}px sans-serif`;
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.lineWidth = 4 / viewport.zoom;
-        world.nations.forEach(nation => {
-            if (nation.capital) {
-                const capX = nation.capital.x * Config.TILE_SIZE;
-                const capY = nation.capital.y * Config.TILE_SIZE;
-                 if (capX > viewLeft && capX < viewRight && capY > viewTop && capY < viewBottom) {
-                    ctx.fillStyle = "#FFFFFF"; ctx.strokeStyle = "#000000";
-                    ctx.strokeText(nation.name, capX, capY);
-                    ctx.fillText(nation.name, capX, capY);
-                }
-            }
-        });
-    }
-}
-
-export function renderSociologyLabels(ctx, type) {
-    const sociology = (type === 'culture') ? world.cultures : world.religions;
-    const grid = (type === 'culture') ? world.cultureGrid : world.religionGrid;
-    const sociologyCenters = new Map();
+function drawLabels(ctx, entities, viewLeft, viewRight, viewTop, viewBottom) {
+    if (viewport.zoom <= 0.4) return;
     
-    for (let y = 0; y < Config.GRID_HEIGHT; y++) {
-        for (let x = 0; x < Config.GRID_WIDTH; x++) {
-            const socioId = grid[y][x];
-            if (socioId !== null) {
-                if (!sociologyCenters.has(socioId)) {
-                    sociologyCenters.set(socioId, { tiles: [] });
+    ctx.font = `bold ${14 / viewport.zoom}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 4 / viewport.zoom;
+    ctx.strokeStyle = "rgba(0,0,0,0.8)";
+    ctx.fillStyle = "#FFFFFF";
+
+    const drawnLabels = [];
+
+    entities.forEach(entity => {
+        if (entity.labelPosition) {
+            const labelX = entity.labelPosition.x * Config.TILE_SIZE + (Config.TILE_SIZE / 2);
+            const labelY = entity.labelPosition.y * Config.TILE_SIZE + (Config.TILE_SIZE / 2);
+
+            if (labelX > viewLeft && labelX < viewRight && labelY > viewTop && labelY < viewBottom) {
+                const textWidth = ctx.measureText(entity.name).width;
+                const labelBox = {
+                    x: labelX - textWidth / 2,
+                    y: labelY - 10 / viewport.zoom,
+                    w: textWidth,
+                    h: 20 / viewport.zoom
+                };
+
+                // Simple collision detection
+                let collision = false;
+                for (const drawn of drawnLabels) {
+                    if (labelBox.x < drawn.x + drawn.w && labelBox.x + labelBox.w > drawn.x &&
+                        labelBox.y < drawn.y + drawn.h && labelBox.y + labelBox.h > drawn.y) {
+                        collision = true;
+                        break;
+                    }
                 }
-                sociologyCenters.get(socioId).tiles.push({x, y});
+
+                if (!collision) {
+                    ctx.strokeText(entity.name, labelX, labelY);
+                    ctx.fillText(entity.name, labelX, labelY);
+                    drawnLabels.push(labelBox);
+                }
             }
         }
-    }
+    });
+}
 
-    if (viewport.zoom > 0.4) {
-        ctx.font = `bold ${20 / viewport.zoom}px sans-serif`;
-        ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.lineWidth = 5 / viewport.zoom;
-        ctx.strokeStyle = "rgba(0,0,0,0.8)";
-        
-        sociologyCenters.forEach((info, id) => {
-            if (info.tiles.length === 0 || !sociology[id]) return;
-            let totalX = 0, totalY = 0;
-            info.tiles.forEach(t => { totalX += t.x; totalY += t.y; });
-            const centerX = (totalX / info.tiles.length) * Config.TILE_SIZE;
-            const centerY = (totalY / info.tiles.length) * Config.TILE_SIZE;
 
-            ctx.fillStyle = "#FFFFFF";
-            ctx.strokeText(sociology[id].name, centerX, centerY);
-            ctx.fillText(sociology[id].name, centerX, centerY);
-        });
+export function renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom) {
+    drawLabels(ctx, Array.from(world.nations.values()), viewLeft, viewRight, viewTop, viewBottom);
+}
+
+export function renderSociologyLabels(ctx, type, viewLeft, viewRight, viewTop, viewBottom) {
+    if (type === 'culture') {
+        if (selection.cultureGroupId !== null) {
+            const subCulturesInGroup = world.subCultures.filter(sc => sc.parentCultureId === selection.cultureGroupId);
+            drawLabels(ctx, subCulturesInGroup, viewLeft, viewRight, viewTop, viewBottom);
+        } else {
+            drawLabels(ctx, world.cultures, viewLeft, viewRight, viewTop, viewBottom);
+        }
+    } else if (type === 'religion') {
+        if (selection.religionId === null) {
+            drawLabels(ctx, world.religions, viewLeft, viewRight, viewTop, viewBottom);
+        }
     }
 }
+
 
 export function drawDiplomacyLines(ctx) {
     const nations = world.nations;

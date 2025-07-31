@@ -1,7 +1,7 @@
 /* Contains functions that create the pre-rendered offscreen canvases
 for each of the primary map modes (political, development, etc)*/
 
-import { world } from '../core/state.js';
+import { world, selection } from '../core/state.js';
 import * as Config from '../core/config.js';
 
 function createLayerCanvas() {
@@ -55,27 +55,55 @@ export function renderDevelopmentMode() {
 export function renderCultureMode() {
     const { canvas, ctx } = createLayerCanvas();
     ctx.globalAlpha = 0.7;
+    const groupSelected = selection.cultureGroupId !== null;
+
     for (let y = 0; y < Config.GRID_HEIGHT; y++) {
         for (let x = 0; x < Config.GRID_WIDTH; x++) {
-            const cultureId = world.cultureGrid[y][x];
-            if (cultureId !== null && world.cultures[cultureId]) {
-                ctx.fillStyle = world.cultures[cultureId].color;
-                ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+            const countyId = world.countyGrid[y][x];
+            if (countyId === null) continue;
+            const county = world.counties.get(countyId);
+            if (!county || county.culture === undefined) continue;
+
+            let color = 'transparent';
+            if (groupSelected) {
+                // A group is selected: show its sub-cultures, grey out others
+                if (county.culture === selection.cultureGroupId) {
+                    const subCulture = world.subCultures[county.subCulture];
+                    if (subCulture) color = subCulture.color;
+                } else {
+                    // Use a semi-transparent grey for non-selected groups
+                    const cultureGroup = world.cultures[county.culture];
+                    if (cultureGroup) {
+                        const baseColor = cultureGroup.color;
+                        // Desaturate and darken the original color to grey it out
+                        color = baseColor.replace(/(\d+)\%,\s*(\d+)\%/, '10%, 30%');
+                    }
+                }
+            } else {
+                // Default view: show the main culture groups
+                const cultureGroup = world.cultures[county.culture];
+                if (cultureGroup) color = cultureGroup.color;
             }
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
         }
     }
     ctx.globalAlpha = 1.0;
     return canvas;
 }
 
+
 export function renderReligionMode() {
     const { canvas, ctx } = createLayerCanvas();
     ctx.globalAlpha = 0.7;
     for (let y = 0; y < Config.GRID_HEIGHT; y++) {
         for (let x = 0; x < Config.GRID_WIDTH; x++) {
-            const religionId = world.religionGrid[y][x];
-            if (religionId !== null && world.religions[religionId]) {
-                ctx.fillStyle = world.religions[religionId].color;
+            const countyId = world.countyGrid[y][x];
+            if (countyId === null) continue;
+            const county = world.counties.get(countyId);
+            if (county && county.religion !== undefined && world.religions[county.religion]) {
+                ctx.fillStyle = world.religions[county.religion].color;
                 ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
             }
         }
@@ -109,4 +137,3 @@ export function renderDiplomaticMode(selectedNationId) {
     }
     return canvas;
 }
-

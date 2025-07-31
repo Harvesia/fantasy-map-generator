@@ -89,3 +89,89 @@ export function randomName(rand, usedNames) {
     usedNames.add(name);
     return name;
 }
+
+/**
+ * Finds the "pole of inaccessibility" for a set of tiles using a distance transform (BFS).
+ * This finds the point within a territory that is furthest from its border.
+ * @param {Set<number>} tileIndices - A set of tile indices belonging to the territory.
+ * @param {number} gridWidth - The width of the world grid.
+ * @param {number} gridHeight - The height of the world grid.
+ * @returns {{x: number, y: number}} The coordinates for the best label position.
+ */
+export function findPoleOfInaccessibility(tileIndices, gridWidth, gridHeight) {
+    if (!tileIndices || tileIndices.size === 0) {
+        return { x: 0, y: 0 }; // Fallback
+    }
+
+    const distances = new Map();
+    const queue = [];
+
+    // 1. Identify all border tiles and initialize the queue
+    tileIndices.forEach(idx => {
+        const x = idx % gridWidth;
+        const y = Math.floor(idx / gridWidth);
+        let isBorder = false;
+        
+        // Check neighbors
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                const nx = x + dx;
+                const ny = y + dy;
+                const nIdx = ny * gridWidth + nx;
+
+                if (nx < 0 || nx >= gridWidth || ny < 0 || ny >= gridHeight || !tileIndices.has(nIdx)) {
+                    isBorder = true;
+                    break;
+                }
+            }
+            if (isBorder) break;
+        }
+
+        if (isBorder) {
+            distances.set(idx, 0);
+            queue.push(idx);
+        } else {
+            distances.set(idx, Infinity);
+        }
+    });
+
+    // 2. Perform Breadth-First Search (BFS) to calculate distance from the border
+    let head = 0;
+    while (head < queue.length) {
+        const currentIdx = queue[head++];
+        const x = currentIdx % gridWidth;
+        const y = Math.floor(currentIdx / gridWidth);
+        const currentDist = distances.get(currentIdx);
+
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                const nx = x + dx;
+                const ny = y + dy;
+                const nIdx = ny * gridWidth + nx;
+
+                if (distances.has(nIdx) && distances.get(nIdx) === Infinity) {
+                    distances.set(nIdx, currentDist + 1);
+                    queue.push(nIdx);
+                }
+            }
+        }
+    }
+
+    // 3. Find the tile with the maximum distance
+    let maxDist = -1;
+    let bestIdx = queue[0] || tileIndices.values().next().value; // Fallback to first tile
+
+    distances.forEach((dist, idx) => {
+        if (dist > maxDist) {
+            maxDist = dist;
+            bestIdx = idx;
+        }
+    });
+
+    return {
+        x: bestIdx % gridWidth,
+        y: Math.floor(bestIdx / gridWidth)
+    };
+}
