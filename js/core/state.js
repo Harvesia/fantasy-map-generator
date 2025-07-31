@@ -3,7 +3,7 @@ viewport, and user selections, also orchestrates the main generation process
 by communicating with the web worker*/
 
 import { GRID_WIDTH, GRID_HEIGHT, TILE_SIZE } from './config.js';
-import { requestRender, createRenderLayers, setMapMode } from '../rendering/mainRenderer.js';
+import { requestRender, createAllRenderLayers, setMapMode, updateCultureLayer } from '../rendering/mainRenderer.js';
 
 // DOM Elements
 const loadingStatus = document.getElementById("loadingStatus");
@@ -33,6 +33,7 @@ generationWorker.onmessage = (e) => {
         loadingStatus.textContent = payload.status;
     } else if (type === 'complete') {
         world = payload.world;
+        // Reconstruct Maps and Sets from the worker payload
         world.nations = new Map(world.nations);
         world.provinces = new Map(world.provinces);
         world.counties = new Map(world.counties);
@@ -51,8 +52,8 @@ generationWorker.onmessage = (e) => {
         });
     
         loadingStatus.textContent = "Creating render layers...";
-        createRenderLayers();
-        fitMapToScreen(); // Fit the new map to the screen
+        createAllRenderLayers(); // Create all layers once after generation
+        fitMapToScreen(); 
         setMapMode('political');
         loadingStatus.textContent = "Generation Complete!";
         generateButton.disabled = false;
@@ -60,7 +61,6 @@ generationWorker.onmessage = (e) => {
 };
 
 //Starts the world generation process
-
 export function generateAndRenderWorld() {
     generateButton.disabled = true;
     resetSelection(false);
@@ -83,8 +83,10 @@ export function generateAndRenderWorld() {
     });
 }
 
-/** Resets the current user selection
-@param {boolean} doRender Whether to trigger a re-render after resetting*/
+// State Management Functions
+
+/**Resets the current user selection state
+ * @param {boolean} doRender - Whether to trigger a re-render after resetting*/
 
 export function resetSelection(doRender = true) {
     selection.level = 0;
@@ -92,12 +94,67 @@ export function resetSelection(doRender = true) {
     selection.provinceId = null;
     selection.countyId = null;
     selection.religionId = null;
+    
+    const cultureChanged = selection.cultureGroupId !== null || selection.subCultureId !== null;
     selection.cultureGroupId = null;
     selection.subCultureId = null;
-    if (doRender) requestRender();
+
+    if (cultureChanged) {
+        updateCultureLayer(); // Specifically update culture layer if it was selected
+    } else if (doRender) {
+        requestRender();
+    }
 }
 
-/** Adjusts the viewport to fit the entire map within the visible screen area*/
+/**Sets the selection state for political entities
+ * @param {number} nationId
+ * @param {number} provinceId
+ * @param {number} countyId
+ * @param {number} level - The selection level (1, 2, or 3)*/
+
+export function setPoliticalSelection(nationId, provinceId, countyId, level) {
+    resetSelection(false);
+    selection.nationId = nationId;
+    selection.provinceId = provinceId;
+    selection.countyId = countyId;
+    selection.level = level;
+    requestRender();
+}
+
+/** Sets the selection state for culture entities
+ * @param {number|null} cultureGroupId
+ * @param {number|null} subCultureId*/
+
+export function setCultureSelection(cultureGroupId, subCultureId) {
+    selection.cultureGroupId = cultureGroupId;
+    selection.subCultureId = subCultureId;
+    // Instead of just requesting a render, we specifically update the culture layer
+    updateCultureLayer();
+}
+
+/**Sets the selection state for a religion
+ * @param {number|null} religionId*/
+
+export function setReligionSelection(religionId) {
+    resetSelection(false);
+    selection.religionId = religionId;
+    requestRender();
+}
+
+/**Sets the selection state for diplomatic view
+ * @param {number} nationId*/
+
+export function setDiplomaticSelection(nationId) {
+    resetSelection(false);
+    selection.level = 1;
+    selection.nationId = nationId;
+    requestRender();
+}
+
+
+// Viewport Management
+
+//Adjusts the viewport to fit the entire map within the visible screen area
 export function fitMapToScreen() {
     const canvas = document.getElementById('map');
     const topBar = document.getElementById('top-bar');

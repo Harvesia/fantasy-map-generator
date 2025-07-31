@@ -1,14 +1,14 @@
 /* Contains shared utility functions used across the application,
 such as noise generation and procedural name creation*/
 
-import { nameParts } from './config.js';
+import { nameParts, GRID_WIDTH, GRID_HEIGHT } from './config.js';
 
 /**Creates a seeded random number generator
-@param {string} seed - The seed string
+@param {string} seed The seed string
 @returns {function(): number} A function that returns a random number between 0 and 1*/
 
 export function createSeededRandom(seed) {
-    // Create a hash from the seed string.
+    // Create a hash from the seed string
     let h = 1779033703, i = 0, ch;
     for (i = 0; i < seed.length; i++) {
         ch = seed.charCodeAt(i);
@@ -173,4 +173,33 @@ export function findPoleOfInaccessibility(tileIndices, gridWidth, gridHeight) {
         x: bestIdx % gridWidth,
         y: Math.floor(bestIdx / gridWidth)
     };
+}
+
+/**Builds and returns an adjacency map for all counties
+ * @param {object} world - The world object
+ * @returns {Map<number, Set<number>>} A map where the key is a county ID and the value is a Set of adjacent county IDs*/
+
+export function getCountyAdjacency(world) {
+    const countyAdjacency = new Map();
+    world.counties.forEach(c => countyAdjacency.set(c.id, new Set()));
+
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            const countyId = world.countyGrid[y][x];
+            if (countyId === null) continue;
+
+            // Check right and down neighbors to avoid redundant checks
+            [[1, 0], [0, 1]].forEach(([dx, dy]) => {
+                const nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
+                    const neighborCountyId = world.countyGrid[ny][nx];
+                    if (neighborCountyId !== null && countyId !== neighborCountyId) {
+                        countyAdjacency.get(countyId).add(neighborCountyId);
+                        countyAdjacency.get(neighborCountyId).add(countyId);
+                    }
+                }
+            });
+        }
+    }
+    return countyAdjacency;
 }

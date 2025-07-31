@@ -1,3 +1,5 @@
+import { GREAT_POWER_COUNT, VASSALIZATION_CHANCE, ADJACENT_VASSALIZATION_CHANCE, GREAT_WAR_CHANCE, BORDER_WAR_CHANCE } from '../core/config.js';
+
 function buildNationAdjacencyGraph(world) {
     world.nationAdjacency = new Map();
     world.nations.forEach(nation => {
@@ -28,17 +30,17 @@ function simulateDiplomacy(world, rand) {
         n.atWarWith = new Set(); n.suzerain = null; n.allianceId = null;
     });
     const sortedNations = Array.from(nations.values()).sort((a,b) => b.power - a.power);
-    const greatPowers = sortedNations.slice(0, 3);
+    const greatPowers = sortedNations.slice(0, GREAT_POWER_COUNT);
     greatPowers.forEach(gp => {
-        if (rand() > 0.6) return;
+        if (rand() > 0.6) return; // Chance for a great power to be isolationist
         sortedNations.forEach(target => {
             if (gp.id !== target.id && target.suzerain === null && !greatPowers.find(p => p.id === target.id)) {
                 const powerRatio = gp.power / target.power;
                 let vassalChance = 0;
                 if (powerRatio > 3.0) {
-                    vassalChance = 0.1; 
+                    vassalChance = VASSALIZATION_CHANCE; 
                     if (world.nationAdjacency.get(gp.id).has(target.id)) {
-                        vassalChance = 0.7;
+                        vassalChance = ADJACENT_VASSALIZATION_CHANCE;
                     }
                 }
                 if (rand() < vassalChance) {
@@ -78,7 +80,7 @@ function simulateDiplomacy(world, rand) {
             });
         });
     }
-    if (allianceLeaders.length >= 2 && rand() > 0.6) {
+    if (allianceLeaders.length >= 2 && rand() > GREAT_WAR_CHANCE) {
         const alliance1Id = nations.get(allianceLeaders[0]).allianceId;
         const alliance2Id = nations.get(allianceLeaders[1]).allianceId;
         nations.forEach(n1 => {
@@ -94,7 +96,7 @@ function simulateDiplomacy(world, rand) {
     nations.forEach(n1 => {
         world.nationAdjacency.get(n1.id).forEach(n2Id => {
             const n2 = nations.get(n2Id);
-            if (n1.id < n2.id && n1.allianceId !== n2.allianceId && !n1.atWarWith.has(n2.id) && rand() > 0.9) {
+            if (n1.id < n2.id && n1.allianceId !== n2.allianceId && !n1.atWarWith.has(n2.id) && rand() > (1 - BORDER_WAR_CHANCE)) {
                 n1.atWarWith.add(n2.id); n2.atWarWith.add(n1.id);
             }
         });

@@ -1,5 +1,5 @@
-import { GRID_WIDTH, GRID_HEIGHT } from '../core/config.js';
-import { randomName } from '../core/utils.js';
+import { GRID_WIDTH, GRID_HEIGHT, COUNTIES_PER_CULTURE, CULTURE_HEARTH_MIN_DISTANCE_FACTOR, CULTURAL_RELIGION_SPAWN_CHANCE, COUNTIES_PER_UNIVERSALIST_RELIGION, BASE_RELIGIOUS_RESISTANCE, FRINGE_RELIGION_RESISTANCE_BONUS, UNIVERSALIST_RELIGION_RESISTANCE_REDUCTION } from '../core/config.js';
+import { randomName, getCountyAdjacency } from '../core/utils.js';
 
 /**Generates a more varied and authentic-sounding name for a religion
  * @param {string} baseName The base name, often from a culture or founder
@@ -41,25 +41,7 @@ function randomReligionName(baseName, rand, type = 'universalist') {
  * @param {string} propertyToSet The county property to set ('culture' or 'subCulture')
  * @param {Map<number, Set<number>>} [allowedTerritory=null] Optional map where key is hearth ID and value is a Set of county IDs the hearth can spread to*/
 
-function spreadByTerrain(world, hearths, propertyToSet, allowedTerritory = null) {
-    const countyAdjacency = new Map();
-    world.counties.forEach(c => countyAdjacency.set(c.id, new Set()));
-    for (let y = 0; y < GRID_HEIGHT; y++) {
-        for (let x = 0; x < GRID_WIDTH; x++) {
-            const countyId = world.countyGrid[y][x];
-            if (countyId === null) continue;
-            [[1, 0], [0, 1], [-1, 0], [0, -1]].forEach(([dx, dy]) => {
-                const nx = x + dx, ny = y + dy;
-                if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
-                    const neighborCountyId = world.countyGrid[ny][nx];
-                    if (neighborCountyId !== null && countyId !== neighborCountyId) {
-                        countyAdjacency.get(countyId).add(neighborCountyId);
-                    }
-                }
-            });
-        }
-    }
-
+function spreadByTerrain(world, hearths, propertyToSet, countyAdjacency, allowedTerritory = null) {
     const costs = new Map();
     const frontier = [];
     world.counties.forEach(c => costs.set(c.id, Infinity));
@@ -102,13 +84,15 @@ function spreadByTerrain(world, hearths, propertyToSet, allowedTerritory = null)
  * @param {Set<string>} usedNames A set of already used names*/
 
 export function generateSociology(world, rand, usedNames) {
+    const countyAdjacency = getCountyAdjacency(world);
+
     // Culture Group Generation
     const landCounties = Array.from(world.counties.values()).filter(c => c.tiles.size > 0 && c.development > 0);
     const cultureGroupHearths = [];
     if (landCounties.length > 0) {
         const sortedCounties = [...landCounties].sort((a, b) => b.development - a.development);
-        const minDistance = GRID_WIDTH / 8;
-        const targetCultureCount = Math.floor(landCounties.length / 70) + 5;
+        const minDistance = GRID_WIDTH / CULTURE_HEARTH_MIN_DISTANCE_FACTOR;
+        const targetCultureCount = Math.floor(landCounties.length / COUNTIES_PER_CULTURE) + 5;
         for (const potentialHearth of sortedCounties) {
             if (cultureGroupHearths.length >= targetCultureCount) break;
             const capital = potentialHearth.capitalSeed;
@@ -120,7 +104,7 @@ export function generateSociology(world, rand, usedNames) {
     
     world.cultures = cultureGroupHearths.map(h => ({ id: h.id, name: randomName(rand, usedNames), color: '', isGroup: false }));
     if (cultureGroupHearths.length > 0) {
-        spreadByTerrain(world, cultureGroupHearths, 'culture');
+        spreadByTerrain(world, cultureGroupHearths, 'culture', countyAdjacency);
     }
 
     // Sub Culture Generation
@@ -160,7 +144,7 @@ export function generateSociology(world, rand, usedNames) {
 
         if (subCultureHearths.length > 0) {
             const territoryMap = new Map(subCultureHearths.map(h => [h.id, countiesSet]));
-            spreadByTerrain(world, subCultureHearths, 'subCulture', territoryMap);
+            spreadByTerrain(world, subCultureHearths, 'subCulture', countyAdjacency, territoryMap);
         }
     });
 
@@ -186,7 +170,7 @@ export function generateSociology(world, rand, usedNames) {
     });
 
     cultureDev.forEach((info, cultureId) => {
-        if (info.hearthCounty && info.topDev > 10 && rand() > 0.6) {
+        if (info.hearthCounty && info.topDev > 10 && rand() > CULTURAL_RELIGION_SPAWN_CHANCE) {
             const cultureName = world.cultures.find(c => c.id === cultureId).name;
             const religionInfo = randomReligionName(cultureName, rand, 'cultural');
             usedNames.add(religionInfo.name);
@@ -197,7 +181,7 @@ export function generateSociology(world, rand, usedNames) {
         }
     });
 
-    const numUniversalistReligions = Math.floor(world.counties.size / 180) + 3;
+    const numUniversalistReligions = Math.floor(world.counties.size / COUNTIES_PER_UNIVERSALIST_RELIGION) + 3;
     const potentialUniversalistHearths = Array.from(world.counties.values())
         .filter(c => c.development > 15 && !usedHearthCounties.has(c.id))
         .sort((a,b) => b.development - a.development);
@@ -222,24 +206,6 @@ export function generateSociology(world, rand, usedNames) {
         religionFrontier.push({ countyId: hearth.countyId, cost: 0, religionId: hearth.religionId });
     });
 
-    const countyAdjacency = new Map();
-    world.counties.forEach(c => countyAdjacency.set(c.id, new Set()));
-    for (let y = 0; y < GRID_HEIGHT; y++) {
-        for (let x = 0; x < GRID_WIDTH; x++) {
-            const countyId = world.countyGrid[y][x];
-            if (countyId === null) continue;
-            [[1, 0], [0, 1], [-1, 0], [0, -1]].forEach(([dx, dy]) => {
-                const nx = x + dx, ny = y + dy;
-                if (nx >= 0 && nx < GRID_WIDTH && ny >= 0 && ny < GRID_HEIGHT) {
-                    const neighborCountyId = world.countyGrid[ny][nx];
-                    if (neighborCountyId !== null && countyId !== neighborCountyId) {
-                        countyAdjacency.get(countyId).add(neighborCountyId);
-                    }
-                }
-            });
-        }
-    }
-
     while(religionFrontier.length > 0) {
         religionFrontier.sort((a,b) => a.cost - b.cost);
         const current = religionFrontier.shift();
@@ -251,14 +217,17 @@ export function generateSociology(world, rand, usedNames) {
 
                 if (spreadingReligion.type === 'cultural' && neighborCounty.culture !== spreadingReligion.originCulture) return;
 
-                let resistance = 70 - (neighborCounty.development * 3);
+                let resistance = BASE_RELIGIOUS_RESISTANCE - (neighborCounty.development * 3);
                 let avgBiomeCost = 0;
                 neighborCounty.tiles.forEach(tileIdx => { avgBiomeCost += world.tiles[tileIdx].biome.cost; });
                 resistance += avgBiomeCost / neighborCounty.tiles.size;
                 
                 if (spreadingReligion.type === 'universalist') {
-                    if (spreadingReligion.subType === 'fringe') resistance += 30;
-                    else resistance -= 25;
+                    if (spreadingReligion.subType === 'fringe') {
+                        resistance += FRINGE_RELIGION_RESISTANCE_BONUS;
+                    } else {
+                        resistance -= UNIVERSALIST_RELIGION_RESISTANCE_REDUCTION;
+                    }
                 }
 
                 const newCost = current.cost + Math.max(5, resistance);

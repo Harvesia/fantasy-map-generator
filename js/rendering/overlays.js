@@ -69,49 +69,80 @@ export function drawBorders(ctx, currentMapMode) {
 
 // highlights
 
+/**Draws a highlight over the currently selected political entity
+ * This function is now highly optimized and only iterates over the tiles
+ * belonging to the selected entity
+ * @param {CanvasRenderingContext2D} ctx The rendering context*/
+
 export function renderFocusHighlight(ctx) {
-    ctx.globalAlpha = 0.7;
+    if (selection.level === 0) return;
+
     const nation = world.nations.get(selection.nationId);
     if (!nation) return;
-    const color = nation.defaultColor;
-    for (let y = 0; y < Config.GRID_HEIGHT; y++) {
-        for (let x = 0; x < Config.GRID_WIDTH; x++) {
-            let highlight = false;
-            if (selection.level === 1 && world.nationGrid[y][x] === selection.nationId) highlight = true;
-            else if (selection.level === 2 && world.provinceGrid[y][x] === selection.provinceId) highlight = true;
-            else if (selection.level === 3 && world.countyGrid[y][x] === selection.countyId) highlight = true;
-            if (highlight) {
-                ctx.fillStyle = color;
-                ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
-            }
+
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = nation.defaultColor;
+
+    const drawTiles = (tileIndices) => {
+        tileIndices.forEach(tileIndex => {
+            const x = tileIndex % Config.GRID_WIDTH;
+            const y = Math.floor(tileIndex / Config.GRID_WIDTH);
+            ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+        });
+    };
+
+    if (selection.level === 3) {
+        const county = world.counties.get(selection.countyId);
+        if (county) drawTiles(county.tiles);
+    } else if (selection.level === 2) {
+        const province = world.provinces.get(selection.provinceId);
+        if (province) {
+            province.children.forEach(countyId => {
+                const county = world.counties.get(countyId);
+                if (county) drawTiles(county.tiles);
+            });
         }
+    } else if (selection.level === 1) {
+        nation.children.forEach(provinceId => {
+            const province = world.provinces.get(provinceId);
+            if (province) {
+                province.children.forEach(countyId => {
+                    const county = world.counties.get(countyId);
+                    if (county) drawTiles(county.tiles);
+                });
+            }
+        });
     }
+
     ctx.globalAlpha = 1.0;
 }
 
+/**Draws a highlight over the currently selected sociological entity (culture/religion)
+ * This function is now optimized to avoid iterating the entire grid
+ * @param {CanvasRenderingContext2D} ctx The rendering context
+ * @param {string} type The type of highlight ('culture' or 'religion')*/
+
 export function renderSociologyHighlight(ctx, type) {
     ctx.globalAlpha = 0.6;
-    if (type === 'culture') {
-        if (selection.subCultureId !== null) {
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            for (let y = 0; y < Config.GRID_HEIGHT; y++) {
-                for (let x = 0; x < Config.GRID_WIDTH; x++) {
-                    const county = world.counties.get(world.countyGrid[y][x]);
-                    if (!county || county.subCulture !== selection.subCultureId) {
-                        ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
-                    }
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+
+    if (type === 'culture' && selection.subCultureId !== null) {
+        // Iterate only over counties that match the selected subCulture.
+        for (let y = 0; y < Config.GRID_HEIGHT; y++) {
+            for (let x = 0; x < Config.GRID_WIDTH; x++) {
+                const county = world.counties.get(world.countyGrid[y][x]);
+                if (!county || county.subCulture !== selection.subCultureId) {
+                    ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
                 }
             }
         }
-    } else if (type === 'religion') {
-        if (selection.religionId !== null) {
-            ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            for (let y = 0; y < Config.GRID_HEIGHT; y++) {
-                for (let x = 0; x < Config.GRID_WIDTH; x++) {
-                    const county = world.counties.get(world.countyGrid[y][x]);
-                    if (!county || county.religion !== selection.religionId) {
-                        ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
-                    }
+    } else if (type === 'religion' && selection.religionId !== null) {
+        // Same as above for religion.
+        for (let y = 0; y < Config.GRID_HEIGHT; y++) {
+            for (let x = 0; x < Config.GRID_WIDTH; x++) {
+                const county = world.counties.get(world.countyGrid[y][x]);
+                if (!county || county.religion !== selection.religionId) {
+                    ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
                 }
             }
         }

@@ -1,4 +1,4 @@
-import { GRID_WIDTH, GRID_HEIGHT, BIOMES } from '../core/config.js';
+import { GRID_WIDTH, GRID_HEIGHT, BIOMES, TERRAIN_OCTAVES, TERRAIN_PERSISTENCE, TERRAIN_LACUNARITY, TERRAIN_INITIAL_FREQUENCY, LANDMASS_EXPONENT, EROSION_ITERATIONS, RIVER_COUNT, RIVER_SOURCE_ELEVATION } from '../core/config.js';
 import { createSeededRandom, SimpleNoise } from '../core/utils.js';
 
 function getBiome(e, m, t) {
@@ -16,19 +16,18 @@ function generateFractalTerrain(world, rand) {
     const warpRand = createSeededRandom(world.seed + "_warp");
     const warpNoise = SimpleNoise(warpRand);
     const elevation = new Float32Array(GRID_WIDTH * GRID_HEIGHT);
-    const octaves = 6, persistence = 0.5, lacunarity = 2.0, initialFrequency = 2.0;
-    const landmassExponent = 1.2;
+    
     const warpFrequency = 3.0;
     const warpStrength = 0.3;
     for (let y = 0; y < GRID_HEIGHT; y++) {
         for (let x = 0; x < GRID_WIDTH; x++) {
             const idx = y * GRID_WIDTH + x;
-            let total = 0, frequency = initialFrequency, amplitude = 1, maxAmplitude = 0;
-            for (let i = 0; i < octaves; i++) {
+            let total = 0, frequency = TERRAIN_INITIAL_FREQUENCY, amplitude = 1, maxAmplitude = 0;
+            for (let i = 0; i < TERRAIN_OCTAVES; i++) {
                 total += terrainNoise(x * frequency / GRID_WIDTH, y * frequency / GRID_HEIGHT) * amplitude;
                 maxAmplitude += amplitude;
-                amplitude *= persistence;
-                frequency *= lacunarity;
+                amplitude *= TERRAIN_PERSISTENCE;
+                frequency *= TERRAIN_LACUNARITY;
             }
             let noiseValue = (total / maxAmplitude + 1) / 2;
             const qx = x / GRID_WIDTH;
@@ -39,7 +38,7 @@ function generateFractalTerrain(world, rand) {
             const ny = qy + warpY - 0.5;
             const dist = Math.sqrt(nx * nx + ny * ny) * 2;
             const falloff = Math.max(0, 1 - dist * dist);
-            elevation[idx] = Math.pow(noiseValue * falloff, landmassExponent);
+            elevation[idx] = Math.pow(noiseValue * falloff, LANDMASS_EXPONENT);
         }
     }
     let minE = Infinity, maxE = -Infinity;
@@ -51,12 +50,11 @@ function generateFractalTerrain(world, rand) {
 }
 
 function runHydraulicErosion(world, rand) {
-    const iterations = 75000;
     const { elevation } = world;
     const water = new Float32Array(elevation.length).fill(0);
     const sediment = new Float32Array(elevation.length).fill(0);
     const Kq = 0.1, Kw = 0.05, Kr = 0.008, Ks = 0.01, Kc = 0.1;
-    for (let i = 0; i < iterations; i++) {
+    for (let i = 0; i < EROSION_ITERATIONS; i++) {
         const x = Math.floor(rand() * GRID_WIDTH), y = Math.floor(rand() * GRID_HEIGHT);
         const idx = y * GRID_WIDTH + x;
         water[idx] += Kq;
@@ -104,12 +102,11 @@ function generateRivers(world, rand) {
     const { elevation } = world;
     const riverFlow = new Float32Array(elevation.length).fill(0);
     const riverSources = [];
-    const numRivers = Math.floor(GRID_WIDTH * GRID_HEIGHT / 500);
-    for (let i = 0; i < numRivers * 2 && riverSources.length < numRivers; i++) {
+    for (let i = 0; i < RIVER_COUNT * 2 && riverSources.length < RIVER_COUNT; i++) {
         const x = Math.floor(rand() * GRID_WIDTH);
         const y = Math.floor(rand() * GRID_HEIGHT);
         const idx = y * GRID_WIDTH + x;
-        if (elevation[idx] > 0.65) { riverSources.push({ x, y }); }
+        if (elevation[idx] > RIVER_SOURCE_ELEVATION) { riverSources.push({ x, y }); }
     }
     for (const source of riverSources) {
         let { x, y } = source;

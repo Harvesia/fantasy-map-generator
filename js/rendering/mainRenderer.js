@@ -21,10 +21,11 @@ export let renderLayers = {
     religion: null,
 };
 
-/* Creates the static, pre-rendered layers on offscreen canvases
-This is a major optimization, as these layers don't need to be redrawn every frame*/
+/**Creates ALL the static, pre-rendered layers on offscreen canvases
+ * This is a major optimization, as these layers don't need to be redrawn every frame
+ * This is called once after a new world is generated*/
 
-export function createRenderLayers() {
+export function createAllRenderLayers() {
     const width = Config.GRID_WIDTH * Config.TILE_SIZE;
     const height = Config.GRID_HEIGHT * Config.TILE_SIZE;
 
@@ -41,6 +42,16 @@ export function createRenderLayers() {
     if(world.counties) renderLayers.development = renderDevelopmentMode();
     if(world.cultures) renderLayers.culture = renderCultureMode();
     if(world.religions) renderLayers.religion = renderReligionMode();
+}
+
+/**Specifically updates the culture layer, this is called when the culture
+ * selection changes, to avoid re-rendering all other layers*/
+
+export function updateCultureLayer() {
+    if (world.cultures) {
+        renderLayers.culture = renderCultureMode();
+        requestRender();
+    }
 }
 
 //Main render loop, draws the appropriate layers to the main canvas
@@ -118,14 +129,14 @@ export function startRenderLoop() {
 }
 
 /**Sets the current map mode and triggers a re-render
-@param {string} mode The new map mode ('political', 'development', etc)*/
-
+ * @param {string} mode The new map mode ('political', 'development', etc)*/
 export function setMapMode(mode) {
     document.querySelectorAll('.map-mode-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`${mode}Button`).classList.add('active');
     
+    // Only reset selection and change the mode string
+    // The actual layer is already rendered and will be drawn by the render loop
     resetSelection(false);
     currentMapMode = mode;
-    createRenderLayers();
     requestRender();
 }

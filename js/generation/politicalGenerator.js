@@ -1,4 +1,4 @@
-import { GRID_WIDTH, GRID_HEIGHT, BIOMES } from '../core/config.js';
+import { GRID_WIDTH, GRID_HEIGHT, BIOMES, DEVELOPMENT_CORES, BASE_DEVELOPMENT } from '../core/config.js';
 import { randomName } from '../core/utils.js';
 
 function assignTilesToCounties(world, capitals, countyGrid, rand) {
@@ -38,8 +38,7 @@ function assignTilesToCounties(world, capitals, countyGrid, rand) {
 
     // After tiles are assigned, calculate development for each county
     const devCores = [];
-    const numCores = Math.floor((GRID_WIDTH * GRID_HEIGHT) / 10000); // Scale cores with map size
-    for (let i = 0; i < numCores; i++) {
+    for (let i = 0; i < DEVELOPMENT_CORES; i++) {
         let x, y;
         do {
             x = Math.floor(rand() * GRID_WIDTH);
@@ -77,8 +76,7 @@ function assignTilesToCounties(world, capitals, countyGrid, rand) {
         }
 
         const avgBiomeDev = totalBiomeDev / landTileCount;
-        const baseDev = 3; // All counties start with a base of 3 dev
-        let finalDev = baseDev + (avgBiomeDev * 2) + coreBonus + ((rand() - 0.5) * 2);
+        let finalDev = BASE_DEVELOPMENT + (avgBiomeDev * 2) + coreBonus + ((rand() - 0.5) * 2);
         county.development = Math.round(Math.max(1, finalDev));
     });
 }
