@@ -1,11 +1,11 @@
 /* Sets up core application event listeners for UI buttons and canvas clicks,
 coordinating between user input, state changes, and UI updates*/
 
-import { viewport, world, selection, resetSelection, generateAndRenderWorld, setPoliticalSelection, setCultureSelection, setReligionSelection, setDiplomaticSelection } from './core/state.js';
+import { viewport, world, selection, resetSelection, generateAndRenderWorld, setPoliticalSelection, setCultureSelection, setReligionSelection } from './core/state.js';
 import * as Config from './core/config.js';
-import { requestRender, currentMapMode, setMapMode } from './rendering/mainRenderer.js';
+import { currentMapMode, setMapMode, updatePoliticalLayer, requestRender } from './rendering/mainRenderer.js';
 import { handleCanvasMouseUp } from './canvasControls.js';
-import { hideAllPanels, showCountyPanel, showProvincePanel, showNationPanel, showCulturePanel, showReligionPanel } from './uiUpdater.js';
+import { hideAllPanels, showCountyPanel, showPolityPanel, showCulturePanel, showReligionPanel } from './uiUpdater.js';
 
 const canvas = document.getElementById("map");
 
@@ -23,16 +23,72 @@ function handleCanvasClick(e) {
 
     const countyId = world.countyGrid[y][x];
     if (countyId === null) {
-        hideAllPanels();
         resetSelection();
+        hideAllPanels();
         return;
     }
     const county = world.counties.get(countyId);
+    const polity = world.polities.get(county.polityId);
+    let realm = polity;
+    while (realm.suzerain !== null) {
+        realm = world.polities.get(realm.suzerain);
+    }
+    
+    if (currentMapMode === 'political' || currentMapMode === 'diplomatic') {
+        let newLevel, newRealmId, newPolityId, newCountyId;
 
-    // Mode-Specific Logic
-    if (currentMapMode === 'culture') {
-        const cultureGroup = world.cultures[county.culture];
+        if (selection.level === 0) { // No selection -> Select Realm
+            newLevel = 1; newRealmId = realm.id; newPolityId = realm.id; newCountyId = null;
+            showPolityPanel(realm.id);
+        } else if (selection.level === 1) { // Realm selected
+            if (selection.realmId === realm.id) { // Clicking inside the same realm
+                newLevel = 2; newRealmId = realm.id; newPolityId = polity.id;
+                showPolityPanel(polity.id);
+            } else { // Clicking a new realm
+                newLevel = 1; newRealmId = realm.id; newPolityId = realm.id; newCountyId = null;
+                showPolityPanel(realm.id);
+            }
+        } else if (selection.level === 2) { // Vassal/Polity selected
+            if (selection.polityId === polity.id) { // Clicking inside same polity
+                newLevel = 3; newRealmId = realm.id; newPolityId = polity.id; newCountyId = countyId;
+                showCountyPanel(countyId);
+            } else { // Clicking a different polity (cycle back to realm selection)
+                 newLevel = 1; newRealmId = realm.id; newPolityId = realm.id; newCountyId = null;
+                 showPolityPanel(realm.id);
+            }
+        } else if (selection.level === 3) { // County selected
+             if (selection.countyId === countyId) { // Clicking same county, cycle back to realm
+                newLevel = 1; newRealmId = realm.id; newPolityId = realm.id; newCountyId = null;
+                showPolityPanel(realm.id);
+             } else { // Clicking a new county
+                newLevel = 3; newRealmId = realm.id; newPolityId = polity.id; newCountyId = countyId;
+                showCountyPanel(countyId);
+             }
+        }
+        
+        setPoliticalSelection(newLevel, newRealmId, newPolityId, newCountyId);
+        updatePoliticalLayer();
+
+    } else if (currentMapMode === 'development') {
+        // Select the lowest administrative division (county) directly
+        const clickedCountyId = county.id;
+        if (selection.countyId === clickedCountyId) {
+            // If clicking the same county, deselect it
+            resetSelection();
+            hideAllPanels();
+        } else {
+            // Otherwise, select the new county
+            // Set level 3 for county selection
+            setPoliticalSelection(3, realm.id, polity.id, clickedCountyId);
+            showCountyPanel(clickedCountyId);
+            requestRender(); // Request a render to show the highlight
+        }
+
+    } else if (currentMapMode === 'culture') {
+        const cultureGroup = world.cultures.find(c => c.id === county.culture);
         const clickedSubCulture = county.subCulture;
+
+        if (!cultureGroup) return;
 
         if (!cultureGroup.isGroup) {
             setCultureSelection(county.culture, clickedSubCulture);
@@ -58,38 +114,11 @@ function handleCanvasClick(e) {
         } else {
             hideAllPanels();
         }
-    } else if (currentMapMode === 'diplomatic') {
-        const province = world.provinces.get(county.parentId);
-        if (province) {
-            setDiplomaticSelection(province.parentId);
-            showNationPanel(province.parentId);
-        }
-    } else { // Political, Physical, Development
-        const province = world.provinces.get(county.parentId);
-        if (!province) return;
-
-        let newLevel;
-        if (currentMapMode === 'development') {
-            newLevel = 3; // Dev mode always shows county
-        } else if (selection.countyId === countyId) {
-            // User is clicking the same spot again, cycle down
-            newLevel = (selection.level % 3) + 1; // 1->2, 2->3, 3->1
-        } else {
-            // User is clicking a new spot, start at the nation level
-            newLevel = 1;
-        }
-        
-        setPoliticalSelection(province.parentId, county.parentId, countyId, newLevel);
-
-        if (newLevel === 3) showCountyPanel(countyId);
-        else if (newLevel === 2) showProvincePanel(county.parentId);
-        else if (newLevel === 1) showNationPanel(province.parentId);
     }
 }
 
 // Sets up the core application listeners (UI buttons, canvas click handler)
 export function setupCoreListeners() {
-    // Generate Button
     document.getElementById('generateButton').onclick = generateAndRenderWorld;
 
     // Map Mode Buttons
@@ -98,18 +127,17 @@ export function setupCoreListeners() {
     document.getElementById('developmentButton').onclick = () => setMapMode('development');
     document.getElementById('cultureButton').onclick = () => setMapMode('culture');
     document.getElementById('religionButton').onclick = () => setMapMode('religion');
+    
     document.getElementById('diplomaticButton').onclick = () => {
         setMapMode('diplomatic');
-        if (world.nations && world.nations.size > 0) {
-            // Select the most powerful nation by default
-            const mostPowerful = Array.from(world.nations.values()).sort((a,b) => b.power - a.power)[0];
-            setDiplomaticSelection(mostPowerful.id);
-            showNationPanel(mostPowerful.id);
+        if (world.polities && world.topLevelPolities.size > 0 && selection.level === 0) {
+            const mostPowerful = Array.from(world.topLevelPolities).map(id => world.polities.get(id)).sort((a,b) => b.power - a.power)[0];
+            setPoliticalSelection(1, mostPowerful.id, mostPowerful.id, null);
+            showPolityPanel(mostPowerful.id);
+            updatePoliticalLayer();
         }
     };
 
-    // Canvas Click Handler
-    // We pass the click handler to the canvas controls module
     canvas.addEventListener('mouseup', (e) => {
         handleCanvasMouseUp(e, handleCanvasClick);
     });

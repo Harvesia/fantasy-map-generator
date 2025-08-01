@@ -4,8 +4,7 @@ to be redrawn frequently as the user interacts with the map*/
 
 import { world, viewport, selection } from '../core/state.js';
 import * as Config from '../core/config.js';
-
-// border drawing
+import { currentMapMode } from './mainRenderer.js';
 
 function drawBorderLine(ctx, x, y, dir, style) {
     ctx.beginPath();
@@ -26,8 +25,8 @@ function drawBorderLine(ctx, x, y, dir, style) {
 export function drawBorders(ctx, currentMapMode) {
     const styles = {
         county: { c: "rgba(0,0,0,0.25)", w: 1 },
-        province: { c: "rgba(0,0,0,0.4)", w: 1.5 },
-        nation: { c: "rgba(0,0,0,1.0)", w: 3.5 },
+        polity: { c: "rgba(0,0,0,0.6)", w: 2 },
+        realm: { c: "rgba(0,0,0,1.0)", w: 3.5 },
         cultureGroup: { c: "rgba(255,255,255,0.6)", w: 3 },
         subCulture: { c: "rgba(255,255,255,0.3)", w: 1.5 },
     };
@@ -53,10 +52,19 @@ export function drawBorders(ctx, currentMapMode) {
         }
     };
 
-    if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || selection.level > 0) {
-        if (viewport.zoom > 4 || selection.level === 3) drawGridBorders(world.countyGrid, styles.county);
-        if (viewport.zoom > 1.5 || selection.level >= 2) drawGridBorders(world.provinceGrid, styles.province);
-        drawGridBorders(world.nationGrid, styles.nation);
+    if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || currentMapMode === 'development') {
+        // In dev mode, always draw county borders when zoomed
+        if (currentMapMode === 'development' && viewport.zoom > 4) {
+             drawGridBorders(world.countyGrid, styles.county);
+        } else if (selection.level === 0) {
+            drawGridBorders(world.realmGrid, styles.realm);
+        } else {
+            drawGridBorders(world.realmGrid, styles.realm);
+            drawGridBorders(world.polityGrid, styles.polity);
+            if (viewport.zoom > 4 || selection.level === 3) {
+                drawGridBorders(world.countyGrid, styles.county);
+            }
+        }
     }
 
     if (currentMapMode === 'culture') {
@@ -67,67 +75,35 @@ export function drawBorders(ctx, currentMapMode) {
     }
 }
 
-// highlights
-
-/**Draws a highlight over the currently selected political entity
- * This function is now highly optimized and only iterates over the tiles
- * belonging to the selected entity
- * @param {CanvasRenderingContext2D} ctx The rendering context*/
-
 export function renderFocusHighlight(ctx) {
-    if (selection.level === 0) return;
+    if (selection.level === 0 || currentMapMode !== 'development') return;
+    
+    ctx.globalAlpha = 1.0; 
+    ctx.fillStyle = 'rgba(255, 255, 100, 0.4)';
 
-    const nation = world.nations.get(selection.nationId);
-    if (!nation) return;
-
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = nation.defaultColor;
-
-    const drawTiles = (tileIndices) => {
-        tileIndices.forEach(tileIndex => {
-            const x = tileIndex % Config.GRID_WIDTH;
-            const y = Math.floor(tileIndex / Config.GRID_WIDTH);
-            ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
-        });
-    };
-
+    const tilesToDraw = new Set();
+    // In dev mode, highlight the specific county (level 3)
     if (selection.level === 3) {
         const county = world.counties.get(selection.countyId);
-        if (county) drawTiles(county.tiles);
-    } else if (selection.level === 2) {
-        const province = world.provinces.get(selection.provinceId);
-        if (province) {
-            province.children.forEach(countyId => {
-                const county = world.counties.get(countyId);
-                if (county) drawTiles(county.tiles);
-            });
+        if (county) {
+            county.tiles.forEach(t => tilesToDraw.add(t));
         }
-    } else if (selection.level === 1) {
-        nation.children.forEach(provinceId => {
-            const province = world.provinces.get(provinceId);
-            if (province) {
-                province.children.forEach(countyId => {
-                    const county = world.counties.get(countyId);
-                    if (county) drawTiles(county.tiles);
-                });
-            }
-        });
     }
+
+    tilesToDraw.forEach(tileIndex => {
+        const x = tileIndex % Config.GRID_WIDTH;
+        const y = Math.floor(tileIndex / Config.GRID_WIDTH);
+        ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+    });
 
     ctx.globalAlpha = 1.0;
 }
-
-/**Draws a highlight over the currently selected sociological entity (culture/religion)
- * This function is now optimized to avoid iterating the entire grid
- * @param {CanvasRenderingContext2D} ctx The rendering context
- * @param {string} type The type of highlight ('culture' or 'religion')*/
 
 export function renderSociologyHighlight(ctx, type) {
     ctx.globalAlpha = 0.6;
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
 
     if (type === 'culture' && selection.subCultureId !== null) {
-        // Iterate only over counties that match the selected subCulture.
         for (let y = 0; y < Config.GRID_HEIGHT; y++) {
             for (let x = 0; x < Config.GRID_WIDTH; x++) {
                 const county = world.counties.get(world.countyGrid[y][x]);
@@ -137,7 +113,6 @@ export function renderSociologyHighlight(ctx, type) {
             }
         }
     } else if (type === 'religion' && selection.religionId !== null) {
-        // Same as above for religion.
         for (let y = 0; y < Config.GRID_HEIGHT; y++) {
             for (let x = 0; x < Config.GRID_WIDTH; x++) {
                 const county = world.counties.get(world.countyGrid[y][x]);
@@ -150,8 +125,6 @@ export function renderSociologyHighlight(ctx, type) {
     ctx.globalAlpha = 1.0;
 }
 
-
-// labels and lines
 
 function drawLabels(ctx, entities, viewLeft, viewRight, viewTop, viewBottom) {
     if (viewport.zoom <= 0.4) return;
@@ -166,7 +139,7 @@ function drawLabels(ctx, entities, viewLeft, viewRight, viewTop, viewBottom) {
     const drawnLabels = [];
 
     entities.forEach(entity => {
-        if (entity.labelPosition) {
+        if (entity && entity.labelPosition) {
             const labelX = entity.labelPosition.x * Config.TILE_SIZE + (Config.TILE_SIZE / 2);
             const labelY = entity.labelPosition.y * Config.TILE_SIZE + (Config.TILE_SIZE / 2);
 
@@ -198,15 +171,33 @@ function drawLabels(ctx, entities, viewLeft, viewRight, viewTop, viewBottom) {
     });
 }
 
-
 export function renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom) {
-    drawLabels(ctx, Array.from(world.nations.values()), viewLeft, viewRight, viewTop, viewBottom);
+    let politiesToLabel = [];
+    
+    if (selection.level === 0) {
+        if (world.topLevelPolities) {
+            politiesToLabel = Array.from(world.topLevelPolities).map(id => world.polities.get(id));
+        }
+    } else if (selection.level === 1) {
+        const realm = world.polities.get(selection.realmId);
+        if(realm) {
+             politiesToLabel = [realm, ...Array.from(realm.vassals).map(id => world.polities.get(id))];
+             politiesToLabel.sort((a, b) => a.power - b.power);
+        }
+    } else if (selection.level === 2 || selection.level === 3) {
+        const polity = world.polities.get(selection.polityId);
+        if (polity) {
+            politiesToLabel = [polity];
+        }
+    }
+
+    drawLabels(ctx, politiesToLabel, viewLeft, viewRight, viewTop, viewBottom);
 }
 
 export function renderSociologyLabels(ctx, type, viewLeft, viewRight, viewTop, viewBottom) {
     if (type === 'culture') {
         if (selection.cultureGroupId !== null) {
-            const cultureGroup = world.cultures[selection.cultureGroupId];
+            const cultureGroup = world.cultures.find(cg => cg.id === selection.cultureGroupId);
             if (cultureGroup && cultureGroup.isGroup) {
                 const subCulturesInGroup = world.subCultures.filter(sc => sc.parentCultureId === selection.cultureGroupId);
                 drawLabels(ctx, subCulturesInGroup, viewLeft, viewRight, viewTop, viewBottom);
@@ -222,38 +213,29 @@ export function renderSociologyLabels(ctx, type, viewLeft, viewRight, viewTop, v
 }
 
 export function drawDiplomacyLines(ctx) {
-    const nations = world.nations;
-    if (!nations) return;
-    const drawnWars = new Set();
-    nations.forEach(nation => {
-        if (!nation.capital) return;
-        const capX = nation.capital.x * Config.TILE_SIZE; const capY = nation.capital.y * Config.TILE_SIZE;
-        nation.vassals.forEach(vassalId => {
-            if (nations.has(vassalId)) {
-                const vassal = nations.get(vassalId);
-                if (!vassal.capital) return;
+    const realm = world.polities.get(selection.realmId);
+    if (!realm) return;
+
+    const capCounty = world.counties.get(realm.capitalCountyId);
+    if (!capCounty) return;
+
+    const capX = capCounty.capitalSeed.x * Config.TILE_SIZE + Config.TILE_SIZE / 2;
+    const capY = capCounty.capitalSeed.y * Config.TILE_SIZE + Config.TILE_SIZE / 2;
+
+    realm.vassals.forEach(vassalId => {
+        const vassal = world.polities.get(vassalId);
+        if (vassal) {
+            const vassalCapCounty = world.counties.get(vassal.capitalCountyId);
+            if (vassalCapCounty) {
+                const vassalCapX = vassalCapCounty.capitalSeed.x * Config.TILE_SIZE + Config.TILE_SIZE / 2;
+                const vassalCapY = vassalCapCounty.capitalSeed.y * Config.TILE_SIZE + Config.TILE_SIZE / 2;
                 ctx.beginPath();
                 ctx.moveTo(capX, capY);
-                ctx.lineTo(vassal.capital.x * Config.TILE_SIZE, vassal.capital.y * Config.TILE_SIZE);
+                ctx.lineTo(vassalCapX, vassalCapY);
                 ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 2 / viewport.zoom; ctx.setLineDash([5 / viewport.zoom, 5 / viewport.zoom]);
                 ctx.stroke();
             }
-        });
-        nation.atWarWith.forEach(enemyId => {
-            const warId = [nation.id, enemyId].sort().join('-');
-            if (!drawnWars.has(warId) && nations.has(enemyId)) {
-                const enemy = nations.get(enemyId);
-                if (!enemy.capital) return;
-                ctx.beginPath();
-                ctx.moveTo(capX, capY);
-                const midX = (capX + enemy.capital.x * Config.TILE_SIZE) / 2 + (Math.random() - 0.5) * 50;
-                const midY = (capY + enemy.capital.y * Config.TILE_SIZE) / 2 + (Math.random() - 0.5) * 50;
-                ctx.quadraticCurveTo(midX, midY, enemy.capital.x * Config.TILE_SIZE, enemy.capital.y * Config.TILE_SIZE);
-                ctx.strokeStyle = "#ff0000"; ctx.lineWidth = 3 / viewport.zoom; ctx.setLineDash([]);
-                ctx.stroke();
-                drawnWars.add(warId);
-            }
-        });
+        }
     });
     ctx.setLineDash([]);
 }

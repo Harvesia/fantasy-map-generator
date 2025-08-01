@@ -1,21 +1,25 @@
-import { GREAT_POWER_COUNT, VASSALIZATION_CHANCE, ADJACENT_VASSALIZATION_CHANCE, GREAT_WAR_CHANCE, BORDER_WAR_CHANCE } from '../core/config.js';
+/* Generates the diplomatic landscape based on a complex opinion system */
 
-function buildNationAdjacencyGraph(world) {
-    world.nationAdjacency = new Map();
-    world.nations.forEach(nation => {
-        world.nationAdjacency.set(nation.id, new Set());
-    });
-    for (let y = 0; y < world.countyGrid.length; y++) {
-        for (let x = 0; x < world.countyGrid[y].length; x++) {
-            const nationId = world.nationGrid[y][x];
-            if (nationId === null || !world.nations.has(nationId)) continue;
-            [[1,0],[0,1]].forEach(([dx,dy]) => {
+import { OPINION_MODIFIERS } from '../core/config.js';
+
+/**Builds an adjacency graph for all polities
+ * @param {object} world The world object*/
+function buildPolityAdjacencyGraph(world) {
+    world.polityAdjacency = new Map();
+    world.polities.forEach(p => world.polityAdjacency.set(p.id, new Set()));
+
+    for (let y = 0; y < world.polityGrid.length; y++) {
+        for (let x = 0; x < world.polityGrid[y].length; x++) {
+            const polityId = world.polityGrid[y][x];
+            if (polityId === null) continue;
+
+            [[1, 0], [0, 1]].forEach(([dx, dy]) => {
                 const nx = x + dx, ny = y + dy;
-                if (nx < world.countyGrid[y].length && ny < world.countyGrid.length) {
-                    const neighborId = world.nationGrid[ny][nx];
-                    if (neighborId !== null && world.nations.has(neighborId) && nationId !== neighborId) {
-                        world.nationAdjacency.get(nationId).add(neighborId);
-                        world.nationAdjacency.get(neighborId).add(nationId);
+                if (nx < world.polityGrid[y].length && ny < world.polityGrid.length) {
+                    const neighborId = world.polityGrid[ny][nx];
+                    if (neighborId !== null && polityId !== neighborId) {
+                        world.polityAdjacency.get(polityId).add(neighborId);
+                        world.polityAdjacency.get(neighborId).add(polityId);
                     }
                 }
             });
@@ -23,87 +27,114 @@ function buildNationAdjacencyGraph(world) {
     }
 }
 
-function simulateDiplomacy(world, rand) {
-    const nations = world.nations;
-    nations.forEach(n => {
-        n.allies = new Set(); n.vassals = new Set();
-        n.atWarWith = new Set(); n.suzerain = null; n.allianceId = null;
-    });
-    const sortedNations = Array.from(nations.values()).sort((a,b) => b.power - a.power);
-    const greatPowers = sortedNations.slice(0, GREAT_POWER_COUNT);
-    greatPowers.forEach(gp => {
-        if (rand() > 0.6) return; // Chance for a great power to be isolationist
-        sortedNations.forEach(target => {
-            if (gp.id !== target.id && target.suzerain === null && !greatPowers.find(p => p.id === target.id)) {
-                const powerRatio = gp.power / target.power;
-                let vassalChance = 0;
-                if (powerRatio > 3.0) {
-                    vassalChance = VASSALIZATION_CHANCE; 
-                    if (world.nationAdjacency.get(gp.id).has(target.id)) {
-                        vassalChance = ADJACENT_VASSALIZATION_CHANCE;
-                    }
-                }
-                if (rand() < vassalChance) {
-                    gp.vassals.add(target.id);
-                    target.suzerain = gp.id;
+/**Calculates the opinion of every polity towards every other polity
+ * @param {object} world The world object*/
+
+function calculateAllOpinions(world) {
+    world.polities.forEach(p1 => {
+        p1.opinions = new Map();
+        world.polities.forEach(p2 => {
+            if (p1.id === p2.id) return;
+
+            let opinion = 0;
+            const p1Culture = world.cultures[world.counties.get(p1.capitalCountyId).culture];
+            const p2Culture = world.cultures[world.counties.get(p2.capitalCountyId).culture];
+            const p1Religion = world.religions[world.counties.get(p1.capitalCountyId).religion];
+            const p2Religion = world.religions[world.counties.get(p2.capitalCountyId).religion];
+
+            // Culture
+            if (p1Culture && p2Culture) {
+                if (p1Culture.id === p2Culture.id) {
+                    opinion += OPINION_MODIFIERS.SAME_CULTURE_GROUP;
+                } else {
+                    opinion += OPINION_MODIFIERS.DIFFERENT_CULTURE_GROUP;
                 }
             }
-        });
-    });
-    const unalignedNations = new Set(Array.from(nations.values()).filter(n => n.suzerain === null && n.allianceId === null).map(n => n.id));
-    const allianceLeaders = [];
-    let allianceCounter = 0;
-    while(unalignedNations.size > 2 && allianceCounter < 4) {
-        const sortedUnaligned = Array.from(unalignedNations).map(id => nations.get(id)).sort((a,b) => b.power - a.power);
-        if (sortedUnaligned.length === 0) break;
-        const leader = sortedUnaligned[0];
-        allianceLeaders.push(leader.id);
-        const allianceId = allianceCounter++;
-        const allianceMembers = new Set();
-        const q = [leader.id];
-        while(q.length > 0) {
-            const currentId = q.shift();
-            if (unalignedNations.has(currentId)) {
-                allianceMembers.add(currentId);
-                nations.get(currentId).allianceId = allianceId;
-                unalignedNations.delete(currentId);
-                world.nationAdjacency.get(currentId).forEach(neighborId => {
-                    if (unalignedNations.has(neighborId) && rand() > 0.5) {
-                        q.push(neighborId);
-                    }
-                });
-            }
-        }
-        allianceMembers.forEach(m1 => {
-            allianceMembers.forEach(m2 => {
-                if (m1 !== m2) nations.get(m1).allies.add(m2);
-            });
-        });
-    }
-    if (allianceLeaders.length >= 2 && rand() > GREAT_WAR_CHANCE) {
-        const alliance1Id = nations.get(allianceLeaders[0]).allianceId;
-        const alliance2Id = nations.get(allianceLeaders[1]).allianceId;
-        nations.forEach(n1 => {
-            const n1Alliance = n1.allianceId !== null ? n1.allianceId : (n1.suzerain ? nations.get(n1.suzerain).allianceId : null);
-            nations.forEach(n2 => {
-                const n2Alliance = n2.allianceId !== null ? n2.allianceId : (n2.suzerain ? nations.get(n2.suzerain).allianceId : null);
-                if (n1Alliance === alliance1Id && n2Alliance === alliance2Id) {
-                    n1.atWarWith.add(n2.id); n2.atWarWith.add(n1.id);
+            
+            // Religion
+            if (p1Religion && p2Religion) {
+                if (p1Religion.id === p2Religion.id) {
+                    opinion += OPINION_MODIFIERS.SAME_RELIGION;
+                } else {
+                    opinion += OPINION_MODIFIERS.DIFFERENT_RELIGION;
                 }
-            });
-        });
-    }
-    nations.forEach(n1 => {
-        world.nationAdjacency.get(n1.id).forEach(n2Id => {
-            const n2 = nations.get(n2Id);
-            if (n1.id < n2.id && n1.allianceId !== n2.allianceId && !n1.atWarWith.has(n2.id) && rand() > (1 - BORDER_WAR_CHANCE)) {
-                n1.atWarWith.add(n2.id); n2.atWarWith.add(n1.id);
             }
+
+            // Borders
+            if (world.polityAdjacency.get(p1.id).has(p2.id)) {
+                opinion += OPINION_MODIFIERS.BORDER_FRICTION;
+            }
+
+            // Power Differential (p1's opinion of p2)
+            const powerRatio = p2.power / p1.power;
+            opinion += (1 - powerRatio) * OPINION_MODIFIERS.POWER_DIFFERENCE_SCALE;
+
+            // Dynasty
+            if (p1.dynasty && p2.dynasty && p1.dynasty.name === p2.dynasty.name) {
+                opinion += OPINION_MODIFIERS.SAME_DYNASTY;
+            }
+            
+            // Suzerain/Vassal relationship
+            if (p1.suzerain === p2.id) opinion += OPINION_MODIFIERS.IS_SUZERAIN;
+            if (p1.vassals.has(p2.id)) opinion += OPINION_MODIFIERS.HAS_VASSAL;
+
+
+            p1.opinions.set(p2.id, Math.round(opinion));
         });
     });
 }
+
+/**Simulates diplomatic actions like alliances and wars based on opinions
+ * @param {object} world The world object
+ * @param {function(): number} rand The seeded random function*/
+
+function simulateDiplomaticActions(world, rand) {
+    const topLevelPolities = Array.from(world.topLevelPolities);
+
+    topLevelPolities.forEach(p1Id => {
+        const p1 = world.polities.get(p1Id);
+        if (!p1) return;
+
+        // Sort other polities by opinion
+        const sortedOpinions = Array.from(p1.opinions.entries()).sort((a, b) => b[1] - a[1]);
+
+        // Form Alliances
+        for (const [p2Id, opinion] of sortedOpinions) {
+            if (p1.allies.size >= 2) break; // Limit allies
+            const p2 = world.polities.get(p2Id);
+            if (p2 && p2.suzerain === null && !p1.allies.has(p2Id) && p2.allies.size < 2) {
+                if (opinion > OPINION_MODIFIERS.ALLY_THRESHOLD + (rand() * 20)) {
+                    p1.allies.add(p2Id);
+                    p2.allies.add(p1Id);
+                }
+            }
+        }
+
+        // Declare Wars
+        for (let i = sortedOpinions.length - 1; i >= 0; i--) {
+            const [p2Id, opinion] = sortedOpinions[i];
+            if (p1.atWarWith.size >= 1) break; // Limit wars
+            const p2 = world.polities.get(p2Id);
+            if (p2 && p2.suzerain === null && !p1.atWarWith.has(p2Id)) {
+                if (opinion < OPINION_MODIFIERS.WAR_THRESHOLD - (rand() * 20)) {
+                    // Check if they are neighbors for a CB
+                    if (world.polityAdjacency.get(p1.id).has(p2.id)) {
+                        p1.atWarWith.add(p2Id);
+                        p2.atWarWith.add(p1Id);
+                    }
+                }
+            }
+        }
+    });
+}
+
+
+/**The main function to generate the entire diplomatic landscape
+ * @param {object} world The world object
+ * @param {function(): number} rand The seeded random function*/
 
 export function generateDiplomacy(world, rand) {
-    buildNationAdjacencyGraph(world);
-    simulateDiplomacy(world, rand);
+    buildPolityAdjacencyGraph(world);
+    calculateAllOpinions(world);
+    simulateDiplomaticActions(world, rand);
 }

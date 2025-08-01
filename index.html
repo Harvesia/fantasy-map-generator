@@ -39,7 +39,7 @@
             <button class="close-btn">&times;</button>
         </div>
         <div class="panel-subheader">
-            <span id="county-province-name">Province Name</span>
+            Part of the <span id="county-polity-name">Polity Name</span>
         </div>
         <div class="panel-content">
             <div class="stat-row"><i class="fas fa-city"></i><span>Development:</span><b id="county-dev">0</b></div>
@@ -51,45 +51,37 @@
         </div>
     </div>
 
-    <!-- Province Information Panel -->
-    <div id="province-panel" class="info-panel hidden">
+    <!-- Polity Information Panel (Replaces Nation/Province) -->
+    <div id="polity-panel" class="info-panel hidden">
         <div class="panel-header">
-            <h3 id="province-name">Province Name</h3>
+            <h3 id="polity-title">Title of Polity Name</h3>
             <button class="close-btn">&times;</button>
         </div>
         <div class="panel-subheader">
-            <span id="province-nation-name">Nation Name</span>
+            Suzerain: <span id="polity-suzerain-name">Suzerain Name</span>
         </div>
         <div class="panel-content">
-            <div class="stat-row"><i class="fas fa-city"></i><span>Total Development:</span><b id="province-dev">0</b></div>
-        </div>
-    </div>
-
-    <!-- Nation Information Panel -->
-    <div id="nation-panel" class="info-panel hidden">
-        <div class="panel-header">
-            <h3 id="nation-name">Nation Name</h3>
-            <button class="close-btn">&times;</button>
-        </div>
-        <div class="panel-content">
-            <div class="stat-row"><i class="fas fa-fist-raised"></i><span>Total Power:</span><b id="nation-power">0</b></div>
+            <div class="stat-row"><i class="fas fa-gavel"></i><span>Government:</span><b id="polity-government">-</b></div>
+            <div class="stat-row"><i class="fas fa-fist-raised"></i><span>Total Power:</span><b id="polity-power">0</b></div>
+            <hr>
+            <h4>Ruler</h4>
+            <div class="stat-row"><i class="fas fa-user-tie"></i><span>Ruler:</span><b id="polity-ruler-name">-</b></div>
+            <div class="stat-row"><i class="fas fa-scroll"></i><span>Admin Skill:</span><b id="polity-ruler-adm">0</b></div>
+            <div class="stat-row"><i class="fas fa-handshake-angle"></i><span>Diplo Skill:</span><b id="polity-ruler-dip">0</b></div>
+            <div class="stat-row"><i class="fas fa-shield-halved"></i><span>Military Skill:</span><b id="polity-ruler-mil">0</b></div>
             <hr>
             <h4>Diplomacy</h4>
             <div class="diplomacy-section">
                 <h5><i class="fas fa-handshake"></i> Allies</h5>
-                <ul id="nation-allies"></ul>
+                <ul id="polity-allies"></ul>
+            </div>
+            <div class="diplomacy-section war">
+                <h5><i class="fas fa-swords"></i> Enemies</h5>
+                <ul id="polity-enemies"></ul>
             </div>
             <div class="diplomacy-section">
                 <h5><i class="fas fa-crown"></i> Vassals</h5>
-                <ul id="nation-vassals"></ul>
-            </div>
-             <div class="diplomacy-section">
-                <h5><i class="fas fa-shield-halved"></i> Suzerain</h5>
-                <p id="nation-suzerain">None</p>
-            </div>
-            <div class="diplomacy-section war">
-                <h5><i class="fas fa-swords"></i> At War With</h5>
-                <ul id="nation-atWarWith"></ul>
+                <ul id="polity-vassals"></ul>
             </div>
         </div>
     </div>

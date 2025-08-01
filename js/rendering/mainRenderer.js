@@ -12,7 +12,6 @@ const ctx = canvas.getContext("2d");
 let needsRender = true;
 export let currentMapMode = 'physical';
 
-// Offscreen canvases for performance
 export let renderLayers = {
     terrain: null,
     political: null,
@@ -20,10 +19,6 @@ export let renderLayers = {
     culture: null,
     religion: null,
 };
-
-/**Creates ALL the static, pre-rendered layers on offscreen canvases
- * This is a major optimization, as these layers don't need to be redrawn every frame
- * This is called once after a new world is generated*/
 
 export function createAllRenderLayers() {
     const width = Config.GRID_WIDTH * Config.TILE_SIZE;
@@ -38,14 +33,18 @@ export function createAllRenderLayers() {
         }
     }
 
-    if(world.nations) renderLayers.political = renderPoliticalMode();
+    if(world.polities) renderLayers.political = renderPoliticalMode();
     if(world.counties) renderLayers.development = renderDevelopmentMode();
     if(world.cultures) renderLayers.culture = renderCultureMode();
     if(world.religions) renderLayers.religion = renderReligionMode();
 }
 
-/**Specifically updates the culture layer, this is called when the culture
- * selection changes, to avoid re-rendering all other layers*/
+export function updatePoliticalLayer() {
+    if (world.polities) {
+        renderLayers.political = renderPoliticalMode();
+        requestRender();
+    }
+}
 
 export function updateCultureLayer() {
     if (world.cultures) {
@@ -54,7 +53,6 @@ export function updateCultureLayer() {
     }
 }
 
-//Main render loop, draws the appropriate layers to the main canvas
 function drawFrame() {
     try {
         if (!world.tiles || world.tiles.length === 0) return;
@@ -78,14 +76,14 @@ function drawFrame() {
 
         if (renderLayers.terrain) ctx.drawImage(renderLayers.terrain, 0, 0);
 
-        if (currentMapMode !== 'physical' && renderLayers[currentMapMode]) {
+        if (currentMapMode === 'diplomatic') {
+            const diploLayer = renderDiplomaticMode(selection.polityId);
+            ctx.drawImage(diploLayer, 0, 0);
+        } else if (currentMapMode !== 'physical' && renderLayers[currentMapMode]) {
             ctx.drawImage(renderLayers[currentMapMode], 0, 0);
         }
        
-        if (currentMapMode === 'diplomatic' && selection.nationId !== null) {
-            const diplomaticLayer = renderDiplomaticMode(selection.nationId);
-            ctx.drawImage(diplomaticLayer, 0, 0);
-        } else if (selection.level > 0) {
+        if (selection.level > 0 && currentMapMode === 'development') {
             renderFocusHighlight(ctx);
         }
 
@@ -94,15 +92,14 @@ function drawFrame() {
         
         drawBorders(ctx, currentMapMode);
 
-        if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || selection.level > 0) {
+        if (currentMapMode === 'political' || currentMapMode === 'diplomatic') {
             renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom);
-        }
-        if (currentMapMode === 'political' && selection.level === 0) {
-            drawDiplomacyLines(ctx);
+        } else if (currentMapMode === 'culture' || currentMapMode === 'religion') {
+            renderSociologyLabels(ctx, currentMapMode, viewLeft, viewRight, viewTop, viewBottom);
         }
         
-        if (currentMapMode === 'culture' || currentMapMode === 'religion') {
-            renderSociologyLabels(ctx, currentMapMode, viewLeft, viewRight, viewTop, viewBottom);
+        if (currentMapMode === 'diplomatic' && selection.level > 0) {
+            drawDiplomacyLines(ctx);
         }
 
         ctx.restore();
@@ -128,15 +125,14 @@ export function startRenderLoop() {
     renderLoop();
 }
 
-/**Sets the current map mode and triggers a re-render
- * @param {string} mode The new map mode ('political', 'development', etc)*/
 export function setMapMode(mode) {
     document.querySelectorAll('.map-mode-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`${mode}Button`).classList.add('active');
     
-    // Only reset selection and change the mode string
-    // The actual layer is already rendered and will be drawn by the render loop
-    resetSelection(false);
+    // Reset selection unless switching to a mode that uses it
+    if (mode !== 'diplomatic') {
+       resetSelection(false);
+    }
     currentMapMode = mode;
     requestRender();
 }

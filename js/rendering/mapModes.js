@@ -13,19 +13,72 @@ function createLayerCanvas() {
 
 export function renderPoliticalMode() {
     const { canvas, ctx } = createLayerCanvas();
-    ctx.globalAlpha = 0.5;
-    for (let y = 0; y < Config.GRID_HEIGHT; y++) {
-        for (let x = 0; x < Config.GRID_WIDTH; x++) {
-            const nationId = world.nationGrid[y][x];
-            if (nationId !== null) {
-                const nation = world.nations.get(nationId);
-                if (nation) {
-                    ctx.fillStyle = nation.defaultColor;
-                    ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+    if (!world.polityGrid) return canvas;
+
+    ctx.globalAlpha = 0.85;
+
+    if (selection.level === 0) {
+        // Default view: Render all realms normally
+        for (let y = 0; y < Config.GRID_HEIGHT; y++) {
+            for (let x = 0; x < Config.GRID_WIDTH; x++) {
+                const polityId = world.polityGrid[y][x];
+                if (polityId !== null) {
+                    const polity = world.polities.get(polityId);
+                    if (polity) {
+                        const realm = world.polities.get(world.realmGrid[y][x]);
+                        if (realm && realm.defaultColor) {
+                            ctx.fillStyle = realm.defaultColor;
+                            ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Highlight selected entity and darken others
+        const selectedTiles = new Set();
+        if (selection.level === 1) { // Highlight entire realm
+            const realm = world.polities.get(selection.realmId);
+            if (realm) {
+                realm.directCounties.forEach(cId => world.counties.get(cId).tiles.forEach(t => selectedTiles.add(t)));
+                realm.vassals.forEach(vId => {
+                    const vassal = world.polities.get(vId);
+                    vassal.directCounties.forEach(cId => world.counties.get(cId).tiles.forEach(t => selectedTiles.add(t)));
+                });
+            }
+        } else if (selection.level === 2) { // Highlight a single polity (vassal or direct land)
+            const polity = world.polities.get(selection.polityId);
+            if (polity) {
+                polity.directCounties.forEach(cId => world.counties.get(cId).tiles.forEach(t => selectedTiles.add(t)));
+            }
+        } else if (selection.level === 3) { // Highlight a single county
+            const county = world.counties.get(selection.countyId);
+            if (county) {
+                county.tiles.forEach(t => selectedTiles.add(t));
+            }
+        }
+
+        for (let y = 0; y < Config.GRID_HEIGHT; y++) {
+            for (let x = 0; x < Config.GRID_WIDTH; x++) {
+                const tileIndex = y * Config.GRID_WIDTH + x;
+                const polityId = world.polityGrid[y][x];
+                if (polityId !== null) {
+                    const realm = world.polities.get(world.realmGrid[y][x]);
+                    if (realm && realm.defaultColor) {
+                        if (selectedTiles.has(tileIndex)) {
+                            // Draw selected tiles with full color
+                            ctx.fillStyle = realm.defaultColor;
+                        } else {
+                            // Draw unselected tiles with a darkened/desaturated color
+                            ctx.fillStyle = realm.defaultColor.replace("70%", "25%").replace("60%", "30%");
+                        }
+                        ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+                    }
                 }
             }
         }
     }
+    
     ctx.globalAlpha = 1.0;
     return canvas;
 }
@@ -33,8 +86,13 @@ export function renderPoliticalMode() {
 export function renderDevelopmentMode() {
     const { canvas, ctx } = createLayerCanvas();
     let maxDev = 0;
-    world.counties.forEach(c => maxDev = Math.max(maxDev, c.development));
-    ctx.globalAlpha = 0.7;
+    // Find max dev, but ignore 0 dev counties for a better scale
+    world.counties.forEach(c => {
+        if (c.development > 0) maxDev = Math.max(maxDev, c.development)
+    });
+    if (maxDev === 0) maxDev = 1; // Avoid division by zero
+
+    ctx.globalAlpha = 0.85;
     for (let y = 0; y < Config.GRID_HEIGHT; y++) {
         for (let x = 0; x < Config.GRID_WIDTH; x++) {
              const countyId = world.countyGrid[y][x];
@@ -42,7 +100,8 @@ export function renderDevelopmentMode() {
              const county = world.counties.get(countyId);
              if(county && county.development > 0) {
                 const normalizedDev = county.development / maxDev;
-                const hue = 120 * normalizedDev;
+                // *** FIX: Correct red-to-green scale. Low dev is red (0), high dev is green (120). ***
+                const hue = normalizedDev * 120;
                 ctx.fillStyle = `hsl(${hue}, 90%, 50%)`;
                 ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
              }
@@ -54,7 +113,7 @@ export function renderDevelopmentMode() {
 
 export function renderCultureMode() {
     const { canvas, ctx } = createLayerCanvas();
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = 0.85;
     const groupSelected = selection.cultureGroupId !== null;
 
     for (let y = 0; y < Config.GRID_HEIGHT; y++) {
@@ -66,22 +125,17 @@ export function renderCultureMode() {
 
             let color = 'transparent';
             if (groupSelected) {
-                // A group is selected: show its sub-cultures, grey out others
                 if (county.culture === selection.cultureGroupId) {
-                    const subCulture = world.subCultures[county.subCulture];
+                    const subCulture = world.subCultures.find(sc => sc.id === county.subCulture);
                     if (subCulture) color = subCulture.color;
                 } else {
-                    // Use a semi-transparent grey for non-selected groups
-                    const cultureGroup = world.cultures[county.culture];
+                    const cultureGroup = world.cultures.find(cg => cg.id === county.culture);
                     if (cultureGroup) {
-                        const baseColor = cultureGroup.color;
-                        // Desaturate and darken the original color to grey it out
-                        color = baseColor.replace(/(\d+)\%,\s*(\d+)\%/, '10%, 30%');
+                        color = cultureGroup.color.replace(/(\d+)\%,\s*(\d+)\%/, '15%, 35%');
                     }
                 }
             } else {
-                // Default view: show the main culture groups
-                const cultureGroup = world.cultures[county.culture];
+                const cultureGroup = world.cultures.find(cg => cg.id === county.culture);
                 if (cultureGroup) color = cultureGroup.color;
             }
             
@@ -96,14 +150,15 @@ export function renderCultureMode() {
 
 export function renderReligionMode() {
     const { canvas, ctx } = createLayerCanvas();
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = 0.85;
     for (let y = 0; y < Config.GRID_HEIGHT; y++) {
         for (let x = 0; x < Config.GRID_WIDTH; x++) {
             const countyId = world.countyGrid[y][x];
             if (countyId === null) continue;
             const county = world.counties.get(countyId);
-            if (county && county.religion !== undefined && world.religions[county.religion]) {
-                ctx.fillStyle = world.religions[county.religion].color;
+            const religion = world.religions.find(r => r.id === county.religion);
+            if (county && religion) {
+                ctx.fillStyle = religion.color;
                 ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
             }
         }
@@ -112,23 +167,23 @@ export function renderReligionMode() {
     return canvas;
 }
 
-export function renderDiplomaticMode(selectedNationId) {
+export function renderDiplomaticMode(selectedPolityId) {
     const { canvas, ctx } = createLayerCanvas();
-    const selected = world.nations.get(selectedNationId);
-    if (!selected) return canvas;
+    const selected = world.polities.get(selectedPolityId);
+    if (!selected) return renderPoliticalMode();
 
     for (let y = 0; y < Config.GRID_HEIGHT; y++) {
         for (let x = 0; x < Config.GRID_WIDTH; x++) {
-            const nationId = world.nationGrid[y][x];
-            if (nationId !== null) {
-                const nation = world.nations.get(nationId);
+            const polityId = world.polityGrid[y][x];
+            if (polityId !== null) {
+                const polity = world.polities.get(polityId);
                 let color;
-                if (nation.id === selectedNationId) color = 'rgba(0, 255, 0, 0.4)';
-                else if (selected.allies.has(nation.id)) color = 'rgba(0, 150, 255, 0.5)'; 
-                else if (selected.vassals.has(nation.id)) color = 'rgba(150, 50, 255, 0.5)';
-                else if (selected.suzerain === nation.id) color = 'rgba(255, 215, 0, 0.5)';
-                else if (selected.atWarWith.has(nation.id)) color = 'rgba(255, 40, 40, 0.5)';
-                else color = 'rgba(128, 128, 128, 0.7)';
+                if (polity.id === selectedPolityId) color = 'rgba(0, 255, 0, 0.9)';
+                else if (selected.allies.has(polity.id)) color = 'rgba(0, 180, 255, 0.9)';
+                else if (selected.vassals.has(polity.id)) color = 'rgba(170, 80, 255, 0.9)';
+                else if (selected.suzerain === polity.id) color = 'rgba(255, 220, 50, 0.9)';
+                else if (selected.atWarWith.has(polity.id)) color = 'rgba(255, 40, 40, 0.9)';
+                else color = 'rgba(128, 128, 128, 0.5)';
                 
                 ctx.fillStyle = color;
                 ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);

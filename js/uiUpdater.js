@@ -2,13 +2,13 @@
 application logic from direct DOM manipulation */
 
 import { world } from './core/state.js';
+import { GOVERNMENT_DEFINITIONS, GOVERNMENT_TYPES } from './core/config.js';
 
 const countyPanel = document.getElementById('county-panel');
-const provincePanel = document.getElementById('province-panel');
-const nationPanel = document.getElementById('nation-panel');
+const polityPanel = document.getElementById('polity-panel');
 const culturePanel = document.getElementById('culture-panel');
 const religionPanel = document.getElementById('religion-panel');
-const allPanels = [countyPanel, provincePanel, nationPanel, culturePanel, religionPanel];
+const allPanels = [countyPanel, polityPanel, culturePanel, religionPanel];
 
 // Hides all information panels
 export function hideAllPanels() {
@@ -21,15 +21,17 @@ export function hideAllPanels() {
 export function showCountyPanel(countyId) {
     const county = world.counties.get(countyId);
     if (!county) return;
-    const province = world.provinces.get(county.parentId);
+    const polity = world.polities.get(county.polityId);
     const cultureGroup = world.cultures[county.culture];
     const subCulture = world.subCultures[county.subCulture];
     const religion = world.religions[county.religion];
 
     document.getElementById('county-name').textContent = county.name;
-    document.getElementById('county-province-name').textContent = province ? province.name : 'N/A';
+    document.getElementById('county-polity-name').textContent = polity ? polity.name : 'N/A';
     document.getElementById('county-dev').textContent = county.development;
-    document.getElementById('county-biome').textContent = world.tiles[county.tiles.values().next().value].biome.name;
+    
+    const tile = world.tiles[county.tiles.values().next().value];
+    if(tile) document.getElementById('county-biome').textContent = tile.biome.name;
     
     if (cultureGroup && cultureGroup.isGroup && subCulture) {
         document.getElementById('county-culture').textContent = `${subCulture.name} (${cultureGroup.name})`;
@@ -43,66 +45,85 @@ export function showCountyPanel(countyId) {
     countyPanel.classList.remove('hidden');
 }
 
-/**Displays and populates the province information panel
- * @param {number} provinceId The ID of the province to display*/
-export function showProvincePanel(provinceId) {
-    const province = world.provinces.get(provinceId);
-    if (!province) return;
-    const nation = world.nations.get(province.parentId);
+/**Displays and populates the polity information panel
+ * @param {number} polityId The ID of the polity to display*/
 
-    document.getElementById('province-name').textContent = province.name;
-    document.getElementById('province-nation-name').textContent = nation ? nation.name : 'N/A';
-    document.getElementById('province-dev').textContent = province.development;
+export function showPolityPanel(polityId) {
+    const polity = world.polities.get(polityId);
+    if (!polity) return;
 
-    hideAllPanels();
-    provincePanel.classList.remove('hidden');
-}
+    document.getElementById('polity-title').textContent = `${polity.title} of ${polity.name}`;
+    
+    const suzerain = polity.suzerain !== null ? world.polities.get(polity.suzerain) : null;
+    document.getElementById('polity-suzerain-name').textContent = suzerain ? suzerain.name : 'Independent';
 
-/**Displays and populates the nation information panel
- * @param {number} nationId The ID of the nation to display*/
+    document.getElementById('polity-power').textContent = polity.power.toFixed(0);
 
-export function showNationPanel(nationId) {
-    const nation = world.nations.get(nationId);
-    if (!nation) return;
-    document.getElementById('nation-name').textContent = nation.name;
-    document.getElementById('nation-power').textContent = nation.power.toFixed(0);
-
-    const suzerainEl = document.getElementById('nation-suzerain');
-    if (nation.suzerain !== null && world.nations.has(nation.suzerain)) {
-        suzerainEl.textContent = world.nations.get(nation.suzerain).name;
-    } else {
-        suzerainEl.textContent = "None";
+    if (polity.government && GOVERNMENT_DEFINITIONS[polity.government]) {
+        document.getElementById('polity-government').textContent = GOVERNMENT_DEFINITIONS[polity.government].name;
     }
 
-    const lists = {
-        'nation-allies': nation.allies,
-        'nation-vassals': nation.vassals,
-        'nation-atWarWith': nation.atWarWith
-    };
-
-    for (const [listId, nationIds] of Object.entries(lists)) {
-        const ul = document.getElementById(listId);
-        ul.innerHTML = '';
-        if (nationIds.size > 0) {
-            nationIds.forEach(id => {
-                const otherNation = world.nations.get(id);
-                if (otherNation) {
-                    const li = document.createElement('li');
-                    li.textContent = otherNation.name;
-                    ul.appendChild(li);
-                }
-            });
+    if (polity.ruler) {
+        if (polity.government === GOVERNMENT_TYPES.MERCHANT_REPUBLIC) {
+            document.getElementById('polity-ruler-name').textContent = `Doge ${polity.ruler.firstName}`;
+        } else if (polity.dynasty) {
+            document.getElementById('polity-ruler-name').textContent = `${polity.ruler.firstName} ${polity.dynasty.name}`;
         } else {
-            const li = document.createElement('li');
-            li.textContent = 'None';
-            li.style.fontStyle = 'italic';
-            li.style.color = '#888';
-            ul.appendChild(li);
+             document.getElementById('polity-ruler-name').textContent = polity.ruler.firstName;
         }
+        document.getElementById('polity-ruler-adm').textContent = polity.ruler.stats.adm;
+        document.getElementById('polity-ruler-dip').textContent = polity.ruler.stats.dip;
+        document.getElementById('polity-ruler-mil').textContent = polity.ruler.stats.mil;
     }
 
+    //Update Diplomacy
+    const alliesList = document.getElementById('polity-allies');
+    alliesList.innerHTML = '';
+    if (polity.allies && polity.allies.size > 0) {
+        polity.allies.forEach(allyId => {
+            const ally = world.polities.get(allyId);
+            if (ally) {
+                const li = document.createElement('li');
+                li.textContent = `${ally.name} (${polity.opinions.get(allyId)})`;
+                alliesList.appendChild(li);
+            }
+        });
+    } else {
+        alliesList.innerHTML = '<li>None</li>';
+    }
+
+    const enemiesList = document.getElementById('polity-enemies');
+    enemiesList.innerHTML = '';
+    if (polity.atWarWith && polity.atWarWith.size > 0) {
+        polity.atWarWith.forEach(enemyId => {
+            const enemy = world.polities.get(enemyId);
+            if (enemy) {
+                const li = document.createElement('li');
+                li.textContent = `${enemy.name} (${polity.opinions.get(enemyId)})`;
+                enemiesList.appendChild(li);
+            }
+        });
+    } else {
+        enemiesList.innerHTML = '<li>None</li>';
+    }
+
+    const vassalList = document.getElementById('polity-vassals');
+    vassalList.innerHTML = '';
+    if (polity.vassals && polity.vassals.size > 0) {
+        polity.vassals.forEach(vassalId => {
+            const vassal = world.polities.get(vassalId);
+            if (vassal) {
+                const li = document.createElement('li');
+                li.textContent = `${vassal.title} of ${vassal.name}`;
+                vassalList.appendChild(li);
+            }
+        });
+    } else {
+        vassalList.innerHTML = '<li>None</li>';
+    }
+    
     hideAllPanels();
-    nationPanel.classList.remove('hidden');
+    polityPanel.classList.remove('hidden');
 }
 
 /**Displays and populates the culture information panel
@@ -129,7 +150,6 @@ export function showCulturePanel(cultureGroupId) {
         subCultureList.appendChild(li);
     }
 
-
     hideAllPanels();
     culturePanel.classList.remove('hidden');
 }
@@ -154,7 +174,6 @@ export function setupPanelListeners() {
         if (closeBtn) {
             closeBtn.onclick = () => {
                 panel.classList.add('hidden');
-                // import resetSelection to avoid circular dependency issues
                 import('./core/state.js').then(stateModule => {
                     stateModule.resetSelection();
                 });

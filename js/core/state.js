@@ -3,7 +3,7 @@ viewport, and user selections, also orchestrates the main generation process
 by communicating with the web worker*/
 
 import { GRID_WIDTH, GRID_HEIGHT, TILE_SIZE } from './config.js';
-import { requestRender, createAllRenderLayers, setMapMode, updateCultureLayer } from '../rendering/mainRenderer.js';
+import { requestRender, createAllRenderLayers, setMapMode, updateCultureLayer, updatePoliticalLayer } from '../rendering/mainRenderer.js';
 
 // DOM Elements
 const loadingStatus = document.getElementById("loadingStatus");
@@ -13,10 +13,11 @@ const currentSeedDisplay = document.getElementById("currentSeedDisplay");
 // Application State
 export let world = {};
 export let viewport = { x: 0, y: 0, zoom: 1.0, MIN_ZOOM: 0.25, MAX_ZOOM: 16.0 };
+
 export let selection = {
-    level: 0, // 0: none, 1: nation, 2: province, 3: county
-    nationId: null,
-    provinceId: null,
+    level: 0, 
+    realmId: null,
+    polityId: null,
     countyId: null,
     religionId: null,
     cultureGroupId: null,
@@ -34,25 +35,24 @@ generationWorker.onmessage = (e) => {
     } else if (type === 'complete') {
         world = payload.world;
         // Reconstruct Maps and Sets from the worker payload
-        world.nations = new Map(world.nations);
-        world.provinces = new Map(world.provinces);
+        world.polities = new Map(world.polities);
         world.counties = new Map(world.counties);
-    
-        world.nations.forEach(nation => {
-            nation.allies = new Set(nation.allies);
-            nation.vassals = new Set(nation.vassals);
-            nation.atWarWith = new Set(nation.atWarWith);
-            nation.children = new Set(nation.children);
-        });
-        world.provinces.forEach(province => {
-            province.children = new Set(province.children);
-        });
-        world.counties.forEach(county => {
-            county.tiles = new Set(county.tiles);
+        world.topLevelPolities = new Set(world.topLevelPolities);
+        world.cultures = Array.isArray(world.cultures) ? world.cultures : [];
+        world.subCultures = Array.isArray(world.subCultures) ? world.subCultures : [];
+        world.religions = Array.isArray(world.religions) ? world.religions : [];
+
+
+        // Reconstruct nested Maps and Sets
+        world.polities.forEach(p => {
+            p.vassals = new Set(p.vassals);
+            p.allies = new Set(p.allies);
+            p.atWarWith = new Set(p.atWarWith);
+            if(p.opinions) p.opinions = new Map(p.opinions);
         });
     
         loadingStatus.textContent = "Creating render layers...";
-        createAllRenderLayers(); // Create all layers once after generation
+        createAllRenderLayers();
         fitMapToScreen(); 
         setMapMode('political');
         loadingStatus.textContent = "Generation Complete!";
@@ -84,56 +84,44 @@ export function generateAndRenderWorld() {
 }
 
 // State Management Functions
-
-/**Resets the current user selection state
- * @param {boolean} doRender - Whether to trigger a re-render after resetting*/
-
 export function resetSelection(doRender = true) {
+    const politicalChanged = selection.level !== 0;
+    const cultureChanged = selection.cultureGroupId !== null || selection.subCultureId !== null;
+
     selection.level = 0;
-    selection.nationId = null;
-    selection.provinceId = null;
+    selection.realmId = null;
+    selection.polityId = null;
     selection.countyId = null;
     selection.religionId = null;
-    
-    const cultureChanged = selection.cultureGroupId !== null || selection.subCultureId !== null;
     selection.cultureGroupId = null;
     selection.subCultureId = null;
 
+    if (politicalChanged) {
+        updatePoliticalLayer();
+    }
     if (cultureChanged) {
-        updateCultureLayer(); // Specifically update culture layer if it was selected
-    } else if (doRender) {
+        updateCultureLayer(); 
+    }
+    if (doRender && !politicalChanged && !cultureChanged) {
         requestRender();
     }
 }
 
-/**Sets the selection state for political entities
- * @param {number} nationId
- * @param {number} provinceId
- * @param {number} countyId
- * @param {number} level - The selection level (1, 2, or 3)*/
+/**Sets the political selection state
+ * The caller is responsible for requesting a render update*/
 
-export function setPoliticalSelection(nationId, provinceId, countyId, level) {
-    resetSelection(false);
-    selection.nationId = nationId;
-    selection.provinceId = provinceId;
-    selection.countyId = countyId;
+export function setPoliticalSelection(level, realmId, polityId, countyId) {
     selection.level = level;
-    requestRender();
+    selection.realmId = realmId;
+    selection.polityId = polityId;
+    selection.countyId = countyId;
 }
-
-/** Sets the selection state for culture entities
- * @param {number|null} cultureGroupId
- * @param {number|null} subCultureId*/
 
 export function setCultureSelection(cultureGroupId, subCultureId) {
     selection.cultureGroupId = cultureGroupId;
     selection.subCultureId = subCultureId;
-    // Instead of just requesting a render, we specifically update the culture layer
     updateCultureLayer();
 }
-
-/**Sets the selection state for a religion
- * @param {number|null} religionId*/
 
 export function setReligionSelection(religionId) {
     resetSelection(false);
@@ -141,20 +129,7 @@ export function setReligionSelection(religionId) {
     requestRender();
 }
 
-/**Sets the selection state for diplomatic view
- * @param {number} nationId*/
-
-export function setDiplomaticSelection(nationId) {
-    resetSelection(false);
-    selection.level = 1;
-    selection.nationId = nationId;
-    requestRender();
-}
-
-
 // Viewport Management
-
-//Adjusts the viewport to fit the entire map within the visible screen area
 export function fitMapToScreen() {
     const canvas = document.getElementById('map');
     const topBar = document.getElementById('top-bar');
@@ -184,8 +159,6 @@ export function fitMapToScreen() {
     clampViewport();
 }
 
-
-// Clamps the viewport to stay within the world boundaries
 export function clampViewport() {
     const canvas = document.getElementById('map');
     const worldWidth = GRID_WIDTH * TILE_SIZE;

@@ -18,6 +18,22 @@ export const DEVELOPMENT_CORES = Math.floor((GRID_WIDTH * GRID_HEIGHT) / 10000);
 // The base development level for every county
 export const BASE_DEVELOPMENT = 3;
 
+// Government Types
+export const GOVERNMENT_TYPES = {
+    FEUDAL_KINGDOM: 'feudal_kingdom',
+    TRIBAL_FEDERATION: 'tribal_federation',
+    MERCHANT_REPUBLIC: 'merchant_republic',
+    IMPERIAL_CONFEDERATION: 'imperial_confederation'
+};
+
+export const GOVERNMENT_DEFINITIONS = {
+    [GOVERNMENT_TYPES.FEUDAL_KINGDOM]: { name: 'Feudal Kingdom' },
+    [GOVERNMENT_TYPES.TRIBAL_FEDERATION]: { name: 'Tribal Federation' },
+    [GOVERNMENT_TYPES.MERCHANT_REPUBLIC]: { name: 'Merchant Republic' },
+    [GOVERNMENT_TYPES.IMPERIAL_CONFEDERATION]: { name: 'Imperial Confederation' }
+};
+
+
 // Terrain Generation
 export const TERRAIN_OCTAVES = 6;
 export const TERRAIN_PERSISTENCE = 0.5;
@@ -49,17 +65,20 @@ export const FRINGE_RELIGION_RESISTANCE_BONUS = 30;
 // Resistance reduction for mainstream "universalist" religions
 export const UNIVERSALIST_RELIGION_RESISTANCE_REDUCTION = 25;
 
-// Diplomacy Generation
-// Number of most powerful nations considered "Great Powers"
-export const GREAT_POWER_COUNT = 3;
-// Base chance for a great power to attempt to vassalize weaker neighbors
-export const VASSALIZATION_CHANCE = 0.1;
-// Increased chance if the target is adjacent
-export const ADJACENT_VASSALIZATION_CHANCE = 0.7;
-// Chance for two major alliances to start in a "Great War"
-export const GREAT_WAR_CHANCE = 0.4; // (1 - 0.6)
-// Chance for any two neighboring, un-allied nations to start a random border war
-export const BORDER_WAR_CHANCE = 0.1; // (1 - 0.9)
+// Diplomacy & Opinion Modifiers
+export const OPINION_MODIFIERS = {
+    SAME_CULTURE_GROUP: 20,
+    DIFFERENT_CULTURE_GROUP: -20,
+    SAME_RELIGION: 30,
+    DIFFERENT_RELIGION: -40,
+    BORDER_FRICTION: -15,
+    POWER_DIFFERENCE_SCALE: 10, // Multiplier for power ratio
+    SAME_DYNASTY: 40,
+    IS_SUZERAIN: 50, // Vassal's opinion of their master
+    HAS_VASSAL: 25, // Master's opinion of their vassal
+    ALLY_THRESHOLD: 80,
+    WAR_THRESHOLD: -100
+};
 
 
 // Biome Definitions
@@ -86,3 +105,5 @@ export const nameParts = {
     middles: ["a", "e", "i", "o", "u", "ae", "ai", "au", "ei", "ia", "io", "ua", "ue", "en", "an", "er", "in", "on", "or", "un", "and", "ess", "ist", "yst"],
     suffixes: ["an", "ar", "en", "ia", "is", "on", "or", "os", "us", "yr", "wood", "dell", "gard", "fall", "crest", "ford", "land", "vale", "wick", "shire", "dor", "mar", "nar", "sor", "thor"]
 };
+
+export const firstNames = ["Aelar", "Baelor", "Corvan", "Daeron", "Eldrin", "Faelan", "Gaelan", "Haldor", "Ithron", "Joric", "Kaelen", "Laenor", "Maekar", "Nyron", "Oryon", "Perrin", "Quentyn", "Rhaegar", "Sorin", "Trystan", "Uther", "Valerius", "Willem", "Xander", "Yorick", "Zane"];

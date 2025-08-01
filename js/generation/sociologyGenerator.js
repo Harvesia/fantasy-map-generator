@@ -103,12 +103,11 @@ export function generateSociology(world, rand, usedNames) {
         }
     }
     
-    world.cultures = cultureGroupHearths.map(h => ({ id: h.id, name: randomName(rand, usedNames), color: '', isGroup: false }));
+    world.cultures = cultureGroupHearths.map((h, i) => ({ id: i, name: randomName(rand, usedNames), color: '', isGroup: false }));
     if (cultureGroupHearths.length > 0) {
         spreadByTerrain(world, cultureGroupHearths, 'culture', countyAdjacency);
     }
 
-    // Fix for cultureless islands
     const culturelessCounties = [];
     world.counties.forEach(county => {
         if (county.culture === undefined && county.tiles.size > 0) {
@@ -163,7 +162,8 @@ export function generateSociology(world, rand, usedNames) {
         const sortedGroupCounties = groupCounties.sort((a,b) => b.development - a.development);
         
         if (numSubCultures > 1) {
-            world.cultures.find(cg => cg.id === cultureGroupId).isGroup = true;
+            const cultureGroup = world.cultures.find(cg => cg.id === cultureGroupId);
+            if (cultureGroup) cultureGroup.isGroup = true;
         }
 
         for(const potentialHearth of sortedGroupCounties) {
@@ -186,7 +186,6 @@ export function generateSociology(world, rand, usedNames) {
         }
     });
 
-    // Fix for missing sub-cultures on isolated islands
     world.counties.forEach(county => {
         if (county.culture !== undefined && county.subCulture === undefined) {
             const parentCultureId = county.culture;
@@ -220,7 +219,12 @@ export function generateSociology(world, rand, usedNames) {
 
     cultureDev.forEach((info, cultureId) => {
         if (info.hearthCounty && info.topDev > 10 && rand() > CULTURAL_RELIGION_SPAWN_CHANCE) {
-            const cultureName = world.cultures.find(c => c.id === cultureId).name;
+            const culture = world.cultures.find(c => c.id === cultureId);
+            if (!culture) {
+                console.warn(`Could not find culture with ID ${cultureId} when generating cultural religion. Skipping.`);
+                return; // Skip this iteration if the culture is not found
+            }
+            const cultureName = culture.name;
             const religionInfo = randomReligionName(cultureName, rand, 'cultural');
             usedNames.add(religionInfo.name);
             world.religions.push({ id: religionIdCounter, name: religionInfo.name, color: '', type: 'cultural', subType: religionInfo.subType, originCulture: cultureId });
@@ -235,7 +239,6 @@ export function generateSociology(world, rand, usedNames) {
         .filter(c => c.development > 15 && !usedHearthCounties.has(c.id))
         .sort((a,b) => b.development - a.development);
 
-    // If not enough ideal hearths, relax criteria to ensure minimum is met
     if (potentialUniversalistHearths.length < numUniversalistReligions) {
         const existingHearthIds = new Set(potentialUniversalistHearths.map(c => c.id));
         const mediumDevHearths = Array.from(world.counties.values())
@@ -244,7 +247,6 @@ export function generateSociology(world, rand, usedNames) {
         potentialUniversalistHearths.push(...mediumDevHearths);
     }
     
-    // If STILL not enough, grab any remaining land county not already used
     if (potentialUniversalistHearths.length < numUniversalistReligions) {
         const existingHearthIds = new Set(potentialUniversalistHearths.map(c => c.id));
         const anyLandHearths = Array.from(world.counties.values())
@@ -253,7 +255,6 @@ export function generateSociology(world, rand, usedNames) {
         potentialUniversalistHearths.push(...anyLandHearths);
     }
 
-    // Now, generate the religions using the guaranteed list of hearths
     for (let i = 0; i < numUniversalistReligions && i < potentialUniversalistHearths.length; i++) {
         const hearthCounty = potentialUniversalistHearths[i];
         const religionInfo = randomReligionName(randomName(rand, usedNames), rand, 'universalist');
@@ -307,32 +308,4 @@ export function generateSociology(world, rand, usedNames) {
             });
         }
     }
-
-    // Populate final grids and nation data
-    for (let y = 0; y < GRID_HEIGHT; y++) {
-        for (let x = 0; x < GRID_WIDTH; x++) {
-            const countyId = world.countyGrid[y][x];
-            if (countyId !== null) {
-                const county = world.counties.get(countyId);
-                if (county) {
-                    world.cultureGrid[y][x] = county.culture;
-                    world.subCultureGrid[y][x] = county.subCulture;
-                }
-            }
-        }
-    }
-
-    world.nations.forEach(nation => {
-        if (nation.capital) {
-            const capCountyId = world.countyGrid[nation.capital.y][nation.capital.x];
-            if (capCountyId !== null) {
-                const capCounty = world.counties.get(capCountyId);
-                if(capCounty) {
-                    nation.culture = capCounty.culture;
-                    nation.subCulture = capCounty.subCulture;
-                    nation.religion = capCounty.religion;
-                }
-            }
-        }
-    });
 }
