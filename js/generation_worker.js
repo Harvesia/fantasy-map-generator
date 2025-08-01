@@ -19,18 +19,17 @@ function calculateLabelPositions(entities, getTilesFn) {
         const tiles = getTilesFn(entity);
         if (tiles && tiles.size > 5) { // Only calculate for reasonably sized territories
             entity.labelPosition = findPoleOfInaccessibility(tiles, GRID_WIDTH, GRID_HEIGHT);
-        } else {
-            // Fallback for very small territories
+        } else if (tiles && tiles.size > 0) {
+            // Fallback for very small territories - use average position
             let avgX = 0, avgY = 0;
-            if (tiles && tiles.size > 0) {
-                tiles.forEach(idx => {
-                    avgX += idx % GRID_WIDTH;
-                    avgY += Math.floor(idx / GRID_WIDTH);
-                });
-                entity.labelPosition = { x: Math.round(avgX / tiles.size), y: Math.round(avgY / tiles.size) };
-            } else {
-                 entity.labelPosition = entity.capitalSeed || { x: 0, y: 0 };
-            }
+            tiles.forEach(idx => {
+                avgX += idx % GRID_WIDTH;
+                avgY += Math.floor(idx / GRID_WIDTH);
+            });
+            entity.labelPosition = { x: Math.round(avgX / tiles.size), y: Math.round(avgY / tiles.size) };
+        } else {
+             // If there are no tiles, do not assign a label position
+             entity.labelPosition = null;
         }
     };
 
@@ -88,7 +87,49 @@ self.onmessage = (e) => {
         post("4. Simulating Diplomacy...");
         generateDiplomacy(world, rand);
 
-        post("5. Calculating Label Positions...");
+        // Cleanup landless nations AFTER diplomacy is set to prevent ghost references
+        post("5. Removing Landless Nations...");
+        const nationsToCull = [];
+        world.nations.forEach(nation => {
+            let landTileCount = 0;
+            if (nation.children.size > 0) {
+                nation.children.forEach(provinceId => {
+                    const province = world.provinces.get(provinceId);
+                    if(province) {
+                        province.children.forEach(countyId => {
+                            const county = world.counties.get(countyId);
+                            if(county) {
+                                county.tiles.forEach(tileIndex => {
+                                    if(world.tiles[tileIndex].biome.cost < 1000) {
+                                        landTileCount++;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            if (landTileCount === 0) {
+                nationsToCull.push(nation.id);
+            }
+        });
+
+        nationsToCull.forEach(nationId => {
+            world.nations.delete(nationId);
+        });
+        
+        // Purge any remaining references in diplomacy
+        world.nations.forEach(nation => {
+            nation.allies = new Set([...nation.allies].filter(id => !nationsToCull.includes(id)));
+            nation.vassals = new Set([...nation.vassals].filter(id => !nationsToCull.includes(id)));
+            nation.atWarWith = new Set([...nation.atWarWith].filter(id => !nationsToCull.includes(id)));
+            if (nation.suzerain && nationsToCull.includes(nation.suzerain)) {
+                nation.suzerain = null;
+            }
+        });
+
+
+        post("6. Calculating Label Positions...");
         calculateLabelPositions(world.nations, (nation) => {
             const nationTiles = new Set();
             nation.children.forEach(provinceId => {
@@ -128,13 +169,13 @@ self.onmessage = (e) => {
         });
 
 
-        post("6. Coloring the World...");
+        post("7. Coloring the World...");
         colorNations(world, rand);
         colorSociology(world, rand, 'cultures');
         colorSociology(world, rand, 'religions');
         
         // Finalization
-        post("7. Finalizing World Data...");
+        post("8. Finalizing World Data...");
 
         world.nations = Array.from(world.nations.entries());
         world.provinces = Array.from(world.provinces.entries());

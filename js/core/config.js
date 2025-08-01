@@ -39,8 +39,9 @@ export const COUNTIES_PER_CULTURE = 70;
 export const CULTURE_HEARTH_MIN_DISTANCE_FACTOR = 8;
 // Chance for a highly developed culture to found its own "cultural" religion
 export const CULTURAL_RELIGION_SPAWN_CHANCE = 0.4; // (1 - 0.6)
-// Number of universalist religions to spawn, based on total county count
-export const COUNTIES_PER_UNIVERSALIST_RELIGION = 180;
+// Minimum and maximum number of universalist religions to generate
+export const MIN_UNIVERSALIST_RELIGIONS = 2;
+export const MAX_UNIVERSALIST_RELIGIONS = 5;
 // Base resistance to religious conversion
 export const BASE_RELIGIOUS_RESISTANCE = 70;
 // Bonus resistance for "fringe" religions like cults or heresies

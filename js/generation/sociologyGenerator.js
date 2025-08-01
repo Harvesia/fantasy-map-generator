@@ -1,4 +1,4 @@
-import { GRID_WIDTH, GRID_HEIGHT, COUNTIES_PER_CULTURE, CULTURE_HEARTH_MIN_DISTANCE_FACTOR, CULTURAL_RELIGION_SPAWN_CHANCE, COUNTIES_PER_UNIVERSALIST_RELIGION, BASE_RELIGIOUS_RESISTANCE, FRINGE_RELIGION_RESISTANCE_BONUS, UNIVERSALIST_RELIGION_RESISTANCE_REDUCTION } from '../core/config.js';
+import { GRID_WIDTH, GRID_HEIGHT, COUNTIES_PER_CULTURE, CULTURE_HEARTH_MIN_DISTANCE_FACTOR, CULTURAL_RELIGION_SPAWN_CHANCE, MIN_UNIVERSALIST_RELIGIONS, MAX_UNIVERSALIST_RELIGIONS, BASE_RELIGIOUS_RESISTANCE, FRINGE_RELIGION_RESISTANCE_BONUS, UNIVERSALIST_RELIGION_RESISTANCE_REDUCTION } from '../core/config.js';
 import { randomName, getCountyAdjacency } from '../core/utils.js';
 
 /**Generates a more varied and authentic-sounding name for a religion
@@ -39,6 +39,7 @@ function randomReligionName(baseName, rand, type = 'universalist') {
  * @param {object} world The world object
  * @param {Array<object>} hearths List of hearths
  * @param {string} propertyToSet The county property to set ('culture' or 'subCulture')
+ * @param {Map<number, Set<number>>} countyAdjacency The pre-calculated adjacency graph
  * @param {Map<number, Set<number>>} [allowedTerritory=null] Optional map where key is hearth ID and value is a Set of county IDs the hearth can spread to*/
 
 function spreadByTerrain(world, hearths, propertyToSet, countyAdjacency, allowedTerritory = null) {
@@ -107,13 +108,50 @@ export function generateSociology(world, rand, usedNames) {
         spreadByTerrain(world, cultureGroupHearths, 'culture', countyAdjacency);
     }
 
+    // Fix for cultureless islands
+    const culturelessCounties = [];
+    world.counties.forEach(county => {
+        if (county.culture === undefined && county.tiles.size > 0) {
+            culturelessCounties.push(county);
+        }
+    });
+
+    if (culturelessCounties.length > 0) {
+        const hearthCenters = new Map();
+        cultureGroupHearths.forEach(hearth => {
+            const hearthCounty = world.counties.get(hearth.countyId);
+            hearthCenters.set(hearth.id, hearthCounty.capitalSeed);
+        });
+
+        culturelessCounties.forEach(county => {
+            let closestHearthId = -1;
+            let minDistance = Infinity;
+            const countyCenter = county.capitalSeed;
+
+            hearthCenters.forEach((center, hearthId) => {
+                const dist = Math.hypot(countyCenter.x - center.x, countyCenter.y - center.y);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestHearthId = hearthId;
+                }
+            });
+
+            if (closestHearthId !== -1) {
+                county.culture = closestHearthId;
+            }
+        });
+    }
+
+
     // Sub Culture Generation
     world.subCultures = [];
     const cultureGroupTerritories = new Map();
     world.cultures.forEach(cg => cultureGroupTerritories.set(cg.id, new Set()));
     world.counties.forEach(c => {
         if (c.culture !== undefined) {
-            cultureGroupTerritories.get(c.culture).add(c.id);
+            if (cultureGroupTerritories.has(c.culture)) {
+                cultureGroupTerritories.get(c.culture).add(c.id);
+            }
         }
     });
 
@@ -145,6 +183,17 @@ export function generateSociology(world, rand, usedNames) {
         if (subCultureHearths.length > 0) {
             const territoryMap = new Map(subCultureHearths.map(h => [h.id, countiesSet]));
             spreadByTerrain(world, subCultureHearths, 'subCulture', countyAdjacency, territoryMap);
+        }
+    });
+
+    // Fix for missing sub-cultures on isolated islands
+    world.counties.forEach(county => {
+        if (county.culture !== undefined && county.subCulture === undefined) {
+            const parentCultureId = county.culture;
+            const primarySubCulture = world.subCultures.find(sc => sc.parentCultureId === parentCultureId);
+            if (primarySubCulture) {
+                county.subCulture = primarySubCulture.id;
+            }
         }
     });
 
@@ -181,11 +230,30 @@ export function generateSociology(world, rand, usedNames) {
         }
     });
 
-    const numUniversalistReligions = Math.floor(world.counties.size / COUNTIES_PER_UNIVERSALIST_RELIGION) + 3;
-    const potentialUniversalistHearths = Array.from(world.counties.values())
+    const numUniversalistReligions = MIN_UNIVERSALIST_RELIGIONS + Math.floor(rand() * (MAX_UNIVERSALIST_RELIGIONS - MIN_UNIVERSALIST_RELIGIONS + 1));
+    let potentialUniversalistHearths = Array.from(world.counties.values())
         .filter(c => c.development > 15 && !usedHearthCounties.has(c.id))
         .sort((a,b) => b.development - a.development);
 
+    // If not enough ideal hearths, relax criteria to ensure minimum is met
+    if (potentialUniversalistHearths.length < numUniversalistReligions) {
+        const existingHearthIds = new Set(potentialUniversalistHearths.map(c => c.id));
+        const mediumDevHearths = Array.from(world.counties.values())
+            .filter(c => c.development > 5 && !usedHearthCounties.has(c.id) && !existingHearthIds.has(c.id))
+            .sort((a,b) => b.development - a.development);
+        potentialUniversalistHearths.push(...mediumDevHearths);
+    }
+    
+    // If STILL not enough, grab any remaining land county not already used
+    if (potentialUniversalistHearths.length < numUniversalistReligions) {
+        const existingHearthIds = new Set(potentialUniversalistHearths.map(c => c.id));
+        const anyLandHearths = Array.from(world.counties.values())
+            .filter(c => c.tiles.size > 0 && !usedHearthCounties.has(c.id) && !existingHearthIds.has(c.id))
+            .sort((a,b) => b.development - a.development);
+        potentialUniversalistHearths.push(...anyLandHearths);
+    }
+
+    // Now, generate the religions using the guaranteed list of hearths
     for (let i = 0; i < numUniversalistReligions && i < potentialUniversalistHearths.length; i++) {
         const hearthCounty = potentialUniversalistHearths[i];
         const religionInfo = randomReligionName(randomName(rand, usedNames), rand, 'universalist');

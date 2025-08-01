@@ -13,6 +13,7 @@ function assignTilesToCounties(world, capitals, countyGrid, rand) {
         county.development = 0; // Initialize dev
     });
 
+    // Main expansion pass
     while (frontier.length > 0) {
         frontier.sort((a, b) => b.cost - a.cost);
         const current = frontier.pop();
@@ -36,15 +37,61 @@ function assignTilesToCounties(world, capitals, countyGrid, rand) {
         }
     }
 
-    // After tiles are assigned, calculate development for each county
+    // Claim all remaining unassigned land tiles
+    const unassignedLand = [];
+    for (let y = 0; y < GRID_HEIGHT; y++) {
+        for (let x = 0; x < GRID_WIDTH; x++) {
+            const tile = world.tiles[y * GRID_WIDTH + x];
+            if (countyGrid[y][x] === null && tile.biome.cost < 1000) {
+                unassignedLand.push({x, y});
+            }
+        }
+    }
+
+    if (unassignedLand.length > 0) {
+        const countyCenters = new Map();
+        world.counties.forEach(county => {
+            if (county.tiles.size > 0) {
+                let avgX = 0, avgY = 0;
+                county.tiles.forEach(tileIndex => {
+                    avgX += tileIndex % GRID_WIDTH;
+                    avgY += Math.floor(tileIndex / GRID_WIDTH);
+                });
+                countyCenters.set(county.id, {
+                    x: avgX / county.tiles.size,
+                    y: avgY / county.tiles.size
+                });
+            }
+        });
+
+        unassignedLand.forEach(tilePos => {
+            let closestCountyId = -1;
+            let minDistance = Infinity;
+            countyCenters.forEach((center, countyId) => {
+                const dist = Math.hypot(tilePos.x - center.x, tilePos.y - center.y);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestCountyId = countyId;
+                }
+            });
+
+            if (closestCountyId !== -1) {
+                countyGrid[tilePos.y][tilePos.x] = closestCountyId;
+                const county = world.counties.get(closestCountyId);
+                county.tiles.add(tilePos.y * GRID_WIDTH + tilePos.x);
+            }
+        });
+    }
+
+    // Development calculation runs immediately after all tiles are assigned
     const devCores = [];
     for (let i = 0; i < DEVELOPMENT_CORES; i++) {
         let x, y;
         do {
             x = Math.floor(rand() * GRID_WIDTH);
             y = Math.floor(rand() * GRID_HEIGHT);
-        } while (world.tiles[y * GRID_WIDTH + x].biome.cost >= 1000); // Only on land
-        devCores.push({x, y, strength: 2 + rand() * 8 }); // Strength from 2 to 10
+        } while (world.tiles[y * GRID_WIDTH + x].biome.cost >= 1000);
+        devCores.push({x, y, strength: 2 + rand() * 8 });
     }
 
     world.counties.forEach(county => {
@@ -324,17 +371,6 @@ export function generatePolitics(world, rand, usedNames, COUNTY_COUNT, PROVINCE_
     
     calculateNationPowerAndCapitals(world);
     fixExclaves(world);
-
-    // Clean up landless nations that might result from fixing exclaves
-    const landlessNations = [];
-    world.nations.forEach(nation => {
-        if (nation.children.size === 0) {
-            landlessNations.push(nation.id);
-        }
-    });
-    landlessNations.forEach(nationId => {
-        world.nations.delete(nationId);
-    });
 
     // Apply logical naming convention after all structural changes are done
     applyLogicalNaming(world);
