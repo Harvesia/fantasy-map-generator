@@ -6,11 +6,33 @@ import { GRID_WIDTH, GRID_HEIGHT } from './core/config.js';
 import { createSeededRandom, findPoleOfInaccessibility } from './core/utils.js';
 import { generateTerrain } from './generation/terrainGenerator.js';
 import { generateBasePolities } from './generation/polityGenerator.js';
+import { simulateHistory } from './generation/historyGenerator.js';
 import { formRealms } from './generation/realmGenerator.js';
 import { generateSociology } from './generation/sociologyGenerator.js';
 import { assignRulers } from './generation/rulerGenerator.js';
 import { generateDiplomacy } from './generation/diplomacyGenerator.js';
 import { colorPolities, colorSociology } from './generation/colorGenerator.js';
+
+/**
+ * Rebuilds the polityGrid based on the current, correct county ownership data.
+ * This is crucial for keeping the render data in sync with the game state.
+ * @param {object} world The world object.
+ * @param {number} width The width of the grid.
+ * @param {number} height The height of the grid.
+ */
+function updatePolityGrid(world, width, height) {
+    world.polityGrid = Array(height).fill(null).map(() => Array(width).fill(null));
+    world.counties.forEach(county => {
+        if (county.polityId !== undefined) {
+            county.tiles.forEach(tileIndex => {
+                const x = tileIndex % width;
+                const y = Math.floor(tileIndex / height);
+                world.polityGrid[y][x] = county.polityId;
+            });
+        }
+    });
+}
+
 
 /**Calculates and stores the best label position for a collection of entities
  * @param {Map<number, object> | Array<object>} entities The entities to process
@@ -66,25 +88,43 @@ self.onmessage = (e) => {
         post("2. Forming Base Polities...");
         generateBasePolities(world, rand, usedNames);
 
-        post("3. Forming Realms...");
+        post("3. Simulating Ancient Empires...");
+        simulateHistory(world, rand, usedNames);
+
+        post("4. Forming Realms...");
         formRealms(world, rand);
 
-        post("4. Spreading Cultures & Religions...");
+        // --- FIX: Synchronize all data after major political changes ---
+        post("5. Finalizing Political State...");
+        // Recalculate power for all polities to reflect structural changes from realm formation
+        world.polities.forEach(polity => {
+            let totalPower = 0;
+            polity.directCounties.forEach(countyId => {
+                totalPower += world.counties.get(countyId).development;
+            });
+            polity.power = totalPower;
+        });
+        // Update the polityGrid to reflect the new, correct ownership before any culling occurs
+        updatePolityGrid(world, width, height);
+        // --- END FIX ---
+
+        post("6. Spreading Cultures & Religions...");
         generateSociology(world, rand, usedNames);
         
-        post("5. Appointing Rulers...");
+        post("7. Appointing Rulers...");
         assignRulers(world, rand, usedNames);
 
-        post("6. Initializing Diplomacy...");
+        post("8. Initializing Diplomacy...");
         world.polities.forEach(p => {
             p.allies = new Set();
             p.atWarWith = new Set();
         });
 
-        post("7. Simulating Diplomacy...");
+        post("9. Simulating Diplomacy...");
         generateDiplomacy(world, rand);
 
-        post("8. Removing Landless Polities...");
+        post("10. Removing Landless Polities...");
+        // This step is now safe because the polityGrid is up-to-date.
         const politiesToCull = [];
         world.polities.forEach(polity => {
             if (polity.directCounties.size === 0 && polity.vassals.size === 0) {
@@ -105,25 +145,24 @@ self.onmessage = (e) => {
         // Create grids for border drawing
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
-                const countyId = world.countyGrid[y][x];
-                if (countyId !== null) {
-                    const county = world.counties.get(countyId);
-                    let polity = world.polities.get(county.polityId);
-                    if (polity) {
+                const polityId = world.polityGrid[y][x]; // Use the now-correct polityGrid
+                if (polityId !== null) {
+                    const polity = world.polities.get(polityId);
+                    if (polity) { // Safety check
                         let topLevelSuzerain = polity;
                         while (topLevelSuzerain.suzerain !== null) {
                             topLevelSuzerain = world.polities.get(topLevelSuzerain.suzerain);
                         }
                         world.realmGrid[y][x] = topLevelSuzerain.id;
                     }
+                     const county = world.counties.get(world.countyGrid[y][x]);
                      if (county.culture !== undefined) world.cultureGrid[y][x] = county.culture;
                      if (county.subCulture !== undefined) world.subCultureGrid[y][x] = county.subCulture;
                 }
             }
         }
 
-        post("9. Calculating Label Positions...");
-        // Calculate label position for each polity based on its DIRECT land ***
+        post("11. Calculating Label Positions...");
         calculateLabelPositions(world.polities, (polity) => {
             const polityTiles = new Set();
             polity.directCounties.forEach(countyId => {
@@ -152,12 +191,12 @@ self.onmessage = (e) => {
         const religionTiles = getTilesByCountyProperty(world.religions, 'religion');
         calculateLabelPositions(world.religions, (r) => religionTiles.get(r.id));
 
-        post("10. Coloring the World...");
+        post("12. Coloring the World...");
         colorPolities(world, rand);
         colorSociology(world, rand, 'cultures');
         colorSociology(world, rand, 'religions');
         
-        post("11. Finalizing World Data...");
+        post("13. Finalizing World Data...");
         world.polities = Array.from(world.polities.entries());
         world.counties = Array.from(world.counties.entries());
         world.topLevelPolities = Array.from(world.topLevelPolities);

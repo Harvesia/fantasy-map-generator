@@ -33,7 +33,7 @@ generationWorker.onmessage = (e) => {
     if (type === 'progress') {
         loadingStatus.textContent = payload.status;
     } else if (type === 'complete') {
-        world = payload.world;
+        Object.assign(world, payload.world);
         // Reconstruct Maps and Sets from the worker payload
         world.polities = new Map(world.polities);
         world.counties = new Map(world.counties);

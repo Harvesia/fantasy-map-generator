@@ -72,6 +72,50 @@ function generateSubordinatePolities(world, rand, usedNames, targetCountyIds, po
     return polityCapitals.map(c => c.id); // Return IDs of the newly created polities
 }
 
+/** Forms the Royal Demesne by having top-level rulers claim the most valuable counties from their vassals
+ * @param {object} world The world object
+ * @param {Array<object>} topLevelPolities The list of independent realm leaders
+*/
+function formRoyalDemenes(world, topLevelPolities) {
+    topLevelPolities.forEach(ruler => {
+        if (ruler.vassals.size === 0) return;
+
+        // 1. Identify all counties controlled by direct vassals
+        const vassalCounties = [];
+        ruler.vassals.forEach(vassalId => {
+            const vassal = world.polities.get(vassalId);
+            vassal.directCounties.forEach(countyId => {
+                vassalCounties.push({ countyId, originalVassalId: vassalId });
+            });
+        });
+
+        // 2. Assess and sort by value (development)
+        vassalCounties.sort((a, b) => {
+            const devA = world.counties.get(a.countyId).development;
+            const devB = world.counties.get(b.countyId).development;
+            return devB - devA;
+        });
+
+        // 3. The King claims the top 15% of counties
+        const claimPercentage = 0.15;
+        const countiesToClaim = vassalCounties.slice(0, Math.floor(vassalCounties.length * claimPercentage));
+
+        // 4. Transfer the land
+        countiesToClaim.forEach(({ countyId, originalVassalId }) => {
+            const originalVassal = world.polities.get(originalVassalId);
+            const county = world.counties.get(countyId);
+
+            // Remove county from vassal
+            originalVassal.directCounties.delete(countyId);
+            // Add county to ruler's direct holdings
+            ruler.directCounties.add(countyId);
+            // Update the county's owner
+            county.polityId = ruler.id;
+        });
+    });
+}
+
+
 /**The main function to form realms from the base polities
  * @param {object} world The world object
  * @param {function(): number} rand The seeded random function*/
@@ -99,11 +143,20 @@ export function formRealms(world, rand) {
     realmLeaders.forEach(suzerain => {
         availablePolities.forEach(polityId => {
             const targetPolity = world.polities.get(polityId);
+            const suzerainCapital = world.counties.get(suzerain.capitalCountyId);
+            const targetCapital = world.counties.get(targetPolity.capitalCountyId);
+
             const dist = Math.hypot(
-                world.counties.get(suzerain.capitalCountyId).capitalSeed.x - world.counties.get(targetPolity.capitalCountyId).capitalSeed.x,
-                world.counties.get(suzerain.capitalCountyId).capitalSeed.y - world.counties.get(targetPolity.capitalCountyId).capitalSeed.y
+                suzerainCapital.capitalSeed.x - targetCapital.capitalSeed.x,
+                suzerainCapital.capitalSeed.y - targetCapital.capitalSeed.y
             );
-            const score = suzerain.power / (dist + 1);
+
+            let score = suzerain.power / (dist + 1);
+
+            if (suzerainCapital.culture !== undefined && suzerainCapital.culture === targetCapital.culture) score *= 1.5;
+            if (suzerainCapital.religion !== undefined && suzerainCapital.religion === targetCapital.religion) score *= 2.0;
+            else score *= 0.75;
+
             allClaims.push({ suzerain, target: targetPolity, score });
         });
     });
@@ -118,39 +171,66 @@ export function formRealms(world, rand) {
         }
     });
 
-    // 3. Duchies can 'sub-infeudate' a limited number of minor vassals
-    // First, assign preliminary titles to identify Duchies
-    world.polities.forEach(p => { p.title = getPolityTitle(p, world); });
-
+    // 3. Preliminary Title Assignment
+    const topLevelPolities = [];
+    world.polities.forEach(p => { if (p.suzerain === null) topLevelPolities.push(p); });
+    
     world.polities.forEach(polity => {
-        if (polity.title === 'Duchy' && polity.suzerain !== null) {
-            const suzerain = world.polities.get(polity.suzerain);
-            const powerCap = polity.power * 0.10;
-            let currentVassalPower = 0;
+        let realmPower = polity.power;
+        polity.vassals.forEach(vassalId => { realmPower += world.polities.get(vassalId).power * 0.5; });
+        polity.realmPower = realmPower;
+        polity.realmCounties = polity.directCounties.size;
+        polity.realmAvgDevelopment = polity.realmPower / polity.realmCounties;
+    });
+    
+    function assignTitlesRecursively(polity) {
+        polity.title = getPolityTitle(polity, world);
+        polity.vassals.forEach(vassalId => assignTitlesRecursively(world.polities.get(vassalId)));
+    }
+    topLevelPolities.forEach(p => assignTitlesRecursively(p));
 
-            const potentialVassals = Array.from(suzerain.vassals)
-                .map(id => world.polities.get(id))
-                .filter(v => v.id !== polity.id && v.power < powerCap)
-                .sort((a, b) => a.power - b.power);
+    // 4. Create the Royal Demesne
+    formRoyalDemenes(world, topLevelPolities);
 
-            for (const targetVassal of potentialVassals) {
-                if (currentVassalPower + targetVassal.power <= powerCap) {
-                    suzerain.vassals.delete(targetVassal.id);
-                    polity.vassals.add(targetVassal.id);
-                    targetVassal.suzerain = polity.id;
-                    currentVassalPower += targetVassal.power;
-                }
-            }
+    // 5. Vassal Realignment Pass for more complex hierarchies
+    const ambitiousVassals = [];
+    world.polities.forEach(p => {
+        if (p.suzerain !== null && (p.title === 'Duchy' || p.title === 'Principality')) {
+            ambitiousVassals.push(p);
         }
     });
 
-    // 4. Handle remaining independent polities
+    ambitiousVassals.forEach(vassal => {
+        const suzerain = world.polities.get(vassal.suzerain);
+        const potentialTargets = Array.from(suzerain.vassals)
+            .map(id => world.polities.get(id))
+            .filter(p => p.id !== vassal.id && p.power < vassal.power * 0.5);
+
+        potentialTargets.forEach(target => {
+            const distToVassal = Math.hypot(
+                world.counties.get(vassal.capitalCountyId).capitalSeed.x - world.counties.get(target.capitalCountyId).capitalSeed.x,
+                world.counties.get(vassal.capitalCountyId).capitalSeed.y - world.counties.get(target.capitalCountyId).capitalSeed.y
+            );
+            const distToSuzerain = Math.hypot(
+                world.counties.get(suzerain.capitalCountyId).capitalSeed.x - world.counties.get(target.capitalCountyId).capitalSeed.x,
+                world.counties.get(suzerain.capitalCountyId).capitalSeed.y - world.counties.get(target.capitalCountyId).capitalSeed.y
+            );
+
+            if (distToVassal < distToSuzerain * 0.5) {
+                suzerain.vassals.delete(target.id);
+                vassal.vassals.add(target.id);
+                target.suzerain = vassal.id;
+            }
+        });
+    });
+
+    // 6. Handle remaining independent polities
     availablePolities.forEach(polityId => {
         const polity = world.polities.get(polityId);
         polity.government = GOVERNMENT_TYPES.FEUDAL_KINGDOM;
     });
 
-    // 5. Final, definitive power calculation and title assignment
+    // 7. Final, definitive power calculation and title assignment
     const finalCalculatedStats = new Map();
     function finalCalculateRealmStats(polity) {
         if (finalCalculatedStats.has(polity.id)) return finalCalculatedStats.get(polity.id);
@@ -185,12 +265,6 @@ export function formRealms(world, rand) {
         polity.realmAvgDevelopment = stats.totalCounties > 0 ? stats.totalPower / stats.totalCounties : 0;
     });
     
-    const topLevelPolities = [];
-    world.polities.forEach(p => { if (p.suzerain === null) topLevelPolities.push(p); });
-    function assignTitlesRecursively(polity) {
-        polity.title = getPolityTitle(polity, world);
-        polity.vassals.forEach(vassalId => assignTitlesRecursively(world.polities.get(vassalId)));
-    }
     topLevelPolities.forEach(p => assignTitlesRecursively(p));
 
     world.topLevelPolities.clear();

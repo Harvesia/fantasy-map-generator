@@ -100,7 +100,6 @@ export function renderDevelopmentMode() {
              const county = world.counties.get(countyId);
              if(county && county.development > 0) {
                 const normalizedDev = county.development / maxDev;
-                // *** FIX: Correct red-to-green scale. Low dev is red (0), high dev is green (120). ***
                 const hue = normalizedDev * 120;
                 ctx.fillStyle = `hsl(${hue}, 90%, 50%)`;
                 ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
