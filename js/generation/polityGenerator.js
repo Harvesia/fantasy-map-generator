@@ -139,7 +139,7 @@ export function generateBasePolities(world, rand, usedNames) {
         const polity = {
             id: i,
             name: randomName(rand, usedNames),
-            title: 'Duchy', // Default title for now
+            title: 'County', // Default title for now
             capitalCountyId: capitalCounty.id,
             directCounties: new Set(),
             vassals: new Set(), // Vassals will be other polities

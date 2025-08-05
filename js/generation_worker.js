@@ -42,6 +42,7 @@ self.onmessage = (e) => {
 
         const world = {
             seed: seed,
+            rand: rand,
             tiles: [],
             counties: new Map(),
             polities: new Map(),
@@ -174,6 +175,7 @@ self.onmessage = (e) => {
             county.tiles = Array.from(county.tiles);
         });
 
+        delete world.rand; // Remove non-clonable function before sending
         self.postMessage({ type: 'complete', payload: { world } });
     }
 };
