@@ -11,6 +11,7 @@ import { formRealms } from './generation/realmGenerator.js';
 import { generateSociology } from './generation/sociologyGenerator.js';
 import { assignRulers } from './generation/rulerGenerator.js';
 import { generateDiplomacy } from './generation/diplomacyGenerator.js';
+import { generateInternalPolitics } from './generation/internalPoliticsGenerator.js';
 import { colorPolities, colorSociology } from './generation/colorGenerator.js';
 
 /**
@@ -32,6 +33,7 @@ function updatePolityGrid(world, width, height) {
         }
     });
 }
+
 
 
 /**Calculates and stores the best label position for a collection of entities
@@ -94,9 +96,7 @@ self.onmessage = (e) => {
         post("4. Forming Realms...");
         formRealms(world, rand);
 
-        // --- FIX: Synchronize all data after major political changes ---
         post("5. Finalizing Political State...");
-        // Recalculate power for all polities to reflect structural changes from realm formation
         world.polities.forEach(polity => {
             let totalPower = 0;
             polity.directCounties.forEach(countyId => {
@@ -104,9 +104,7 @@ self.onmessage = (e) => {
             });
             polity.power = totalPower;
         });
-        // Update the polityGrid to reflect the new, correct ownership before any culling occurs
         updatePolityGrid(world, width, height);
-        // --- END FIX ---
 
         post("6. Spreading Cultures & Religions...");
         generateSociology(world, rand, usedNames);
@@ -123,7 +121,10 @@ self.onmessage = (e) => {
         post("9. Simulating Diplomacy...");
         generateDiplomacy(world, rand);
 
-        post("10. Removing Landless Polities...");
+        post("10. Generating Internal Politics...");
+                generateInternalPolitics(world);
+
+        post("11. Removing Landless Polities...");
         // This step is now safe because the polityGrid is up-to-date.
         const politiesToCull = [];
         world.polities.forEach(polity => {
@@ -162,7 +163,7 @@ self.onmessage = (e) => {
             }
         }
 
-        post("11. Calculating Label Positions...");
+        post("12. Calculating Label Positions...");
         calculateLabelPositions(world.polities, (polity) => {
             const polityTiles = new Set();
             polity.directCounties.forEach(countyId => {
@@ -191,12 +192,12 @@ self.onmessage = (e) => {
         const religionTiles = getTilesByCountyProperty(world.religions, 'religion');
         calculateLabelPositions(world.religions, (r) => religionTiles.get(r.id));
 
-        post("12. Coloring the World...");
+        post("13. Coloring the World...");
         colorPolities(world, rand);
         colorSociology(world, rand, 'cultures');
         colorSociology(world, rand, 'religions');
         
-        post("13. Finalizing World Data...");
+        post("14. Finalizing World Data...");
         world.polities = Array.from(world.polities.entries());
         world.counties = Array.from(world.counties.entries());
         world.topLevelPolities = Array.from(world.topLevelPolities);

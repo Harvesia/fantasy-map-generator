@@ -225,9 +225,37 @@ export function formRealms(world, rand) {
     });
 
     // 6. Handle remaining independent polities
+    // 6. Handle remaining independent polities
     availablePolities.forEach(polityId => {
         const polity = world.polities.get(polityId);
         polity.government = GOVERNMENT_TYPES.FEUDAL_KINGDOM;
+    });
+
+    // 7. Generate Realm Laws for independent realms
+    realmLeaders.forEach(realm => {
+        realm.laws = {};
+
+        // Crown Authority
+        const caRoll = rand();
+        if (realm.realmCounties > 30 && realm.government === GOVERNMENT_TYPES.IMPERIAL_CONFEDERATION) {
+            realm.laws.crownAuthority = 'Low';
+        } else if (caRoll < 0.33) {
+            realm.laws.crownAuthority = 'Low';
+        } else if (caRoll < 0.66) {
+            realm.laws.crownAuthority = 'Medium';
+        } else {
+            realm.laws.crownAuthority = 'High';
+        }
+
+        // Succession Law
+        const succRoll = rand();
+        if (succRoll < 0.6) {
+            realm.laws.succession = 'Primogeniture';
+        } else if (succRoll < 0.9) {
+            realm.laws.succession = 'Confederate Partition';
+        } else {
+            realm.laws.succession = 'Elective Monarchy';
+        }
     });
 
     // 7. Final, definitive power calculation and title assignment

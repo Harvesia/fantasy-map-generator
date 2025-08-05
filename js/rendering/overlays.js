@@ -52,7 +52,7 @@ export function drawBorders(ctx, currentMapMode) {
         }
     };
 
-    if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || currentMapMode === 'development') {
+    if (currentMapMode === 'political' || currentMapMode === 'diplomatic' || currentMapMode === 'development' || currentMapMode === 'factions') {
         // In dev mode, always draw county borders when zoomed
         if (currentMapMode === 'development' && viewport.zoom > 4) {
              drawGridBorders(world.countyGrid, styles.county);
@@ -192,6 +192,18 @@ export function renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom
     }
 
     drawLabels(ctx, politiesToLabel, viewLeft, viewRight, viewTop, viewBottom);
+}
+
+export function renderFactionLabels(ctx, viewLeft, viewRight, viewTop, viewBottom) {
+    const factionsToLabel = [];
+    world.polities.forEach(polity => {
+        if (polity.factions) {
+            polity.factions.forEach(faction => {
+                factionsToLabel.push(faction);
+            });
+        }
+    });
+    drawLabels(ctx, factionsToLabel, viewLeft, viewRight, viewTop, viewBottom);
 }
 
 export function renderSociologyLabels(ctx, type, viewLeft, viewRight, viewTop, viewBottom) {

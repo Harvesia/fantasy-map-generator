@@ -19,7 +19,7 @@ function buildPolityAdjacencyGraph(world) {
                     const neighborId = world.polityGrid[ny][nx];
                     if (neighborId !== null && polityId !== neighborId) {
                         world.polityAdjacency.get(polityId).add(neighborId);
-                        world.polityAdjacency.get(neighborId).add(polityId);
+                        world.polityAdjacency.get(neighborId).add(neighborId);
                     }
                 }
             });
@@ -70,7 +70,7 @@ function calculateAllOpinions(world) {
             opinion += (1 - powerRatio) * OPINION_MODIFIERS.POWER_DIFFERENCE_SCALE;
 
             // Dynasty
-            if (p1.dynasty && p2.dynasty && p1.dynasty.name === p2.dynasty.name) {
+            if (p1.dynasty && p2.dynasty && p1.dynasty.name === p1.dynasty.name) {
                 opinion += OPINION_MODIFIERS.SAME_DYNASTY;
             }
             
@@ -98,25 +98,25 @@ function simulateDiplomaticActions(world, rand) {
         // Sort other polities by opinion
         const sortedOpinions = Array.from(p1.opinions.entries()).sort((a, b) => b[1] - a[1]);
 
-        // Form Alliances
+        // Form Alliances (Lowered threshold from 80 to 60)
         for (const [p2Id, opinion] of sortedOpinions) {
             if (p1.allies.size >= 2) break; // Limit allies
             const p2 = world.polities.get(p2Id);
             if (p2 && p2.suzerain === null && !p1.allies.has(p2Id) && p2.allies.size < 2) {
-                if (opinion > OPINION_MODIFIERS.ALLY_THRESHOLD + (rand() * 20)) {
+                if (opinion > (OPINION_MODIFIERS.ALLY_THRESHOLD - 20) + (rand() * 25)) {
                     p1.allies.add(p2Id);
                     p2.allies.add(p1Id);
                 }
             }
         }
 
-        // Declare Wars
+        // Declare Wars (Raised threshold from -100 to -75)
         for (let i = sortedOpinions.length - 1; i >= 0; i--) {
             const [p2Id, opinion] = sortedOpinions[i];
             if (p1.atWarWith.size >= 1) break; // Limit wars
             const p2 = world.polities.get(p2Id);
             if (p2 && p2.suzerain === null && !p1.atWarWith.has(p2Id)) {
-                if (opinion < OPINION_MODIFIERS.WAR_THRESHOLD - (rand() * 20)) {
+                if (opinion < (OPINION_MODIFIERS.WAR_THRESHOLD + 25) - (rand() * 30)) {
                     // Check if they are neighbors for a CB
                     if (world.polityAdjacency.get(p1.id).has(p2.id)) {
                         p1.atWarWith.add(p2Id);
@@ -124,6 +124,48 @@ function simulateDiplomaticActions(world, rand) {
                     }
                 }
             }
+        }
+    });
+}
+
+/**
+ * Checks for and triggers civil wars based on a direct power comparison of the entire rebellious bloc.
+ * @param {object} world The world object.
+ */
+function simulateRebellions(world) {
+    world.polities.forEach(suzerain => {
+        // Only top-level rulers can have civil wars, and they must have factions.
+        if (suzerain.suzerain !== null || !suzerain.factions || suzerain.factions.length === 0) {
+            return;
+        }
+
+        let hasRebelliousSpark = false;
+        let totalFactionPower = 0;
+        const allRebelliousMembers = new Set();
+
+        // Calculate the total power of all factions and check for the 100% LD spark.
+        suzerain.factions.forEach(faction => {
+            const factionLeader = world.polities.get(faction.leader);
+            if (factionLeader && factionLeader.libertyDesire >= 100) {
+                hasRebelliousSpark = true;
+            }
+            totalFactionPower += faction.power;
+            faction.members.forEach(memberId => allRebelliousMembers.add(memberId));
+        });
+
+        // Check the two conditions for a massive civil war
+        if (hasRebelliousSpark && totalFactionPower > (suzerain.realmPower || suzerain.power)) {
+            // THE REALM SHATTERS
+            // The suzerain is now at war with every member of every faction.
+            suzerain.atWarWith = new Set([...suzerain.atWarWith, ...allRebelliousMembers]);
+            
+            // Every rebel is now at war with the suzerain.
+            allRebelliousMembers.forEach(memberId => {
+                const member = world.polities.get(memberId);
+                if (member) {
+                    member.atWarWith.add(suzerain.id);
+                }
+            });
         }
     });
 }
@@ -137,4 +179,5 @@ export function generateDiplomacy(world, rand) {
     buildPolityAdjacencyGraph(world);
     calculateAllOpinions(world);
     simulateDiplomaticActions(world, rand);
+    simulateRebellions(world);
 }

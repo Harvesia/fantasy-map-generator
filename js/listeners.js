@@ -1,11 +1,11 @@
 /* Sets up core application event listeners for UI buttons and canvas clicks,
 coordinating between user input, state changes, and UI updates*/
 
-import { viewport, world, selection, resetSelection, generateAndRenderWorld, setPoliticalSelection, setCultureSelection, setReligionSelection } from './core/state.js';
+import { viewport, world, selection, resetSelection, generateAndRenderWorld, setPoliticalSelection, setCultureSelection, setReligionSelection, setFactionSelection } from './core/state.js';
 import * as Config from './core/config.js';
 import { currentMapMode, setMapMode, updatePoliticalLayer, requestRender } from './rendering/mainRenderer.js';
 import { handleCanvasMouseUp } from './canvasControls.js';
-import { hideAllPanels, showCountyPanel, showPolityPanel, showCulturePanel, showReligionPanel } from './uiUpdater.js';
+import { hideAllPanels, showCountyPanel, showPolityPanel, showCulturePanel, showReligionPanel, showFactionPanel, showLedgerPanel } from './uiUpdater.js';
 
 const canvas = document.getElementById("map");
 
@@ -114,6 +114,22 @@ function handleCanvasClick(e) {
         } else {
             hideAllPanels();
         }
+    } else if (currentMapMode === 'factions') {
+        if (polity.suzerain !== null) {
+            const suzerain = world.polities.get(polity.suzerain);
+            if (suzerain && suzerain.factions) {
+                const faction = suzerain.factions.find(f => f.members.includes(polity.id));
+                if (faction) {
+                    const newFactionId = (selection.factionId === faction.leader) ? null : faction.leader;
+                    setFactionSelection(newFactionId);
+                    if (newFactionId !== null) {
+                        showFactionPanel(newFactionId, suzerain.id);
+                    } else {
+                        hideAllPanels();
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -127,6 +143,8 @@ export function setupCoreListeners() {
     document.getElementById('developmentButton').onclick = () => setMapMode('development');
     document.getElementById('cultureButton').onclick = () => setMapMode('culture');
     document.getElementById('religionButton').onclick = () => setMapMode('religion');
+    document.getElementById('factionsButton').onclick = () => setMapMode('factions');
+    document.getElementById('ledgerButton').onclick = () => showLedgerPanel();
     
     document.getElementById('diplomaticButton').onclick = () => {
         setMapMode('diplomatic');

@@ -22,6 +22,7 @@ export let selection = {
     religionId: null,
     cultureGroupId: null,
     subCultureId: null,
+    factionId: null,
 };
 
 // Create the generation worker
@@ -126,6 +127,12 @@ export function setCultureSelection(cultureGroupId, subCultureId) {
 export function setReligionSelection(religionId) {
     resetSelection(false);
     selection.religionId = religionId;
+    requestRender();
+}
+
+export function setFactionSelection(factionId) {
+    resetSelection(false);
+    selection.factionId = factionId;
     requestRender();
 }
 

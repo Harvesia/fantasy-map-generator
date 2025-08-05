@@ -8,7 +8,9 @@ const countyPanel = document.getElementById('county-panel');
 const polityPanel = document.getElementById('polity-panel');
 const culturePanel = document.getElementById('culture-panel');
 const religionPanel = document.getElementById('religion-panel');
-const allPanels = [countyPanel, polityPanel, culturePanel, religionPanel];
+const factionPanel = document.getElementById('faction-panel');
+const ledgerPanel = document.getElementById('ledger-panel');
+const allPanels = [countyPanel, polityPanel, culturePanel, religionPanel, factionPanel, ledgerPanel];
 
 // Hides all information panels
 export function hideAllPanels() {
@@ -76,6 +78,45 @@ export function showPolityPanel(polityId) {
         document.getElementById('polity-ruler-mil').textContent = polity.ruler.stats.mil;
     }
 
+    //Update Realm Laws
+    const realmLawsSection = document.getElementById('polity-realm-laws');
+    if (polity.suzerain === null && polity.laws) {
+        document.getElementById('polity-crown-authority').textContent = polity.laws.crownAuthority;
+        document.getElementById('polity-succession-law').textContent = polity.laws.succession;
+        realmLawsSection.style.display = 'block';
+    } else {
+        realmLawsSection.style.display = 'none';
+    }
+
+    //Update Factions
+    const factionsContainer = document.getElementById('polity-factions-container');
+    const factionsList = document.getElementById('polity-factions');
+    factionsList.innerHTML = '';
+
+    if (polity.suzerain === null) {
+        // Hide Factions section for independent rulers
+        factionsContainer.style.display = 'none';
+    } else {
+        // Show Factions section for vassals
+        factionsContainer.style.display = 'block';
+
+        // Find the TOP-LEVEL suzerain to check for factions
+        let topLevelSuzerain = polity;
+        while (topLevelSuzerain.suzerain !== null && world.polities.has(topLevelSuzerain.suzerain)) {
+            topLevelSuzerain = world.polities.get(topLevelSuzerain.suzerain);
+        }
+        
+        const factionJoined = topLevelSuzerain?.factions?.find(f => f.members.includes(polity.id));
+
+        if (factionJoined) {
+            const li = document.createElement('li');
+            li.textContent = `Member of the "${factionJoined.name}"`;
+            factionsList.appendChild(li);
+        } else {
+            factionsList.innerHTML = '<li>None</li>';
+        }
+    }
+
     //Update Diplomacy
     const alliesList = document.getElementById('polity-allies');
     alliesList.innerHTML = '';
@@ -114,7 +155,7 @@ export function showPolityPanel(polityId) {
             const vassal = world.polities.get(vassalId);
             if (vassal) {
                 const li = document.createElement('li');
-                li.textContent = `${vassal.title} of ${vassal.name}`;
+                li.textContent = `${vassal.title} of ${vassal.name} (Liberty Desire: ${vassal.libertyDesire}%)`;
                 vassalList.appendChild(li);
             }
         });
@@ -167,6 +208,39 @@ export function showReligionPanel(religionId) {
     religionPanel.classList.remove('hidden');
 }
 
+export function showFactionPanel(factionLeaderId, suzerainId) {
+    const suzerain = world.polities.get(suzerainId);
+    if (!suzerain || !suzerain.factions) return;
+
+    const faction = suzerain.factions.find(f => f.leader === factionLeaderId);
+    if (!faction) return;
+
+    document.getElementById('faction-name').textContent = faction.name;
+    document.getElementById('faction-power').textContent = Math.round(faction.power);
+
+    const membersList = document.getElementById('faction-members');
+    membersList.innerHTML = '';
+    faction.members.forEach(memberId => {
+        const member = world.polities.get(memberId);
+        if (member) {
+            const li = document.createElement('li');
+            li.textContent = `${member.title} of ${member.name}`;
+            membersList.appendChild(li);
+        }
+    });
+
+    hideAllPanels();
+    factionPanel.classList.remove('hidden');
+}
+
+/**
+ * Displays the ledger panel.
+ */
+export function showLedgerPanel() {
+    hideAllPanels();
+    ledgerPanel.classList.remove('hidden');
+}
+
 // event listeners for the close buttons on all panels
 export function setupPanelListeners() {
     allPanels.forEach(panel => {
@@ -174,9 +248,12 @@ export function setupPanelListeners() {
         if (closeBtn) {
             closeBtn.onclick = () => {
                 panel.classList.add('hidden');
-                import('./core/state.js').then(stateModule => {
-                    stateModule.resetSelection();
-                });
+                // The ledger doesn't represent a "selection", so no need to reset it.
+                if (panel.id !== 'ledger-panel') {
+                    import('./core/state.js').then(stateModule => {
+                        stateModule.resetSelection();
+                    });
+                }
             };
         }
     });

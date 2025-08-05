@@ -3,6 +3,7 @@ for each of the primary map modes (political, development, etc)*/
 
 import { world, selection } from '../core/state.js';
 import * as Config from '../core/config.js';
+import { drawBorders } from './overlays.js';
 
 function createLayerCanvas() {
     const width = Config.GRID_WIDTH * Config.TILE_SIZE;
@@ -189,5 +190,54 @@ export function renderDiplomaticMode(selectedPolityId) {
             }
         }
     }
+    return canvas;
+}
+
+export function renderFactionsMode() {
+    const { canvas, ctx } = createLayerCanvas();
+    if (!world.polityGrid) return canvas;
+
+    ctx.globalAlpha = 0.85;
+
+    const factionColors = {};
+    let factionCounter = 0;
+
+    for (let y = 0; y < Config.GRID_HEIGHT; y++) {
+        for (let x = 0; x < Config.GRID_WIDTH; x++) {
+            const polityId = world.polityGrid[y][x];
+            if (polityId !== null) {
+                const polity = world.polities.get(polityId);
+                if (polity) {
+                    // Find the ultimate overlord of this polity's realm
+                    let topLevelSuzerain = polity;
+                    while (topLevelSuzerain.suzerain !== null && world.polities.has(topLevelSuzerain.suzerain)) {
+                        topLevelSuzerain = world.polities.get(topLevelSuzerain.suzerain);
+                    }
+
+                    let faction = null;
+                    if (topLevelSuzerain && topLevelSuzerain.factions) {
+                        faction = topLevelSuzerain.factions.find(f => f.members.includes(polity.id));
+                    }
+
+                    if (faction) {
+                        // Use faction leader's ID for a consistent color
+                        if (!factionColors[faction.leader]) {
+                            factionColors[faction.leader] = `hsl(${factionCounter * 137.5}, 70%, 50%)`;
+                            factionCounter++;
+                        }
+                        ctx.fillStyle = factionColors[faction.leader];
+                        ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+                    } else {
+                        // Land not in a faction (e.g., ruler's demesne, loyal vassals)
+                        ctx.fillStyle = 'rgba(128, 128, 128, 0.5)';
+                        ctx.fillRect(x * Config.TILE_SIZE, y * Config.TILE_SIZE, Config.TILE_SIZE, Config.TILE_SIZE);
+                    }
+                }
+            }
+        }
+    }
+
+    ctx.globalAlpha = 1.0;
+    drawBorders(ctx, 'political');
     return canvas;
 }

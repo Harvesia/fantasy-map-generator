@@ -3,8 +3,8 @@ from offscreen canvases, and managing map modes*/
 
 import { viewport, world, selection, resetSelection } from '../core/state.js';
 import * as Config from '../core/config.js';
-import { renderPoliticalMode, renderDevelopmentMode, renderCultureMode, renderReligionMode, renderDiplomaticMode } from './mapModes.js';
-import { renderFocusHighlight, renderSociologyHighlight, renderNationLabels, renderSociologyLabels, drawBorders, drawDiplomacyLines } from './overlays.js';
+import { renderPoliticalMode, renderDevelopmentMode, renderCultureMode, renderReligionMode, renderDiplomaticMode, renderFactionsMode } from './mapModes.js';
+import { renderFocusHighlight, renderSociologyHighlight, renderNationLabels, renderSociologyLabels, drawBorders, drawDiplomacyLines, renderFactionLabels } from './overlays.js';
 
 const canvas = document.getElementById("map");
 const ctx = canvas.getContext("2d");
@@ -34,6 +34,7 @@ export function createAllRenderLayers() {
     }
 
     if(world.polities) renderLayers.political = renderPoliticalMode();
+    if(world.polities) renderLayers.factions = renderFactionsMode();
     if(world.counties) renderLayers.development = renderDevelopmentMode();
     if(world.cultures) renderLayers.culture = renderCultureMode();
     if(world.religions) renderLayers.religion = renderReligionMode();
@@ -96,6 +97,8 @@ function drawFrame() {
             renderNationLabels(ctx, viewLeft, viewRight, viewTop, viewBottom);
         } else if (currentMapMode === 'culture' || currentMapMode === 'religion') {
             renderSociologyLabels(ctx, currentMapMode, viewLeft, viewRight, viewTop, viewBottom);
+        } else if (currentMapMode === 'factions') {
+            renderFactionLabels(ctx, viewLeft, viewRight, viewTop, viewBottom);
         }
         
         if (currentMapMode === 'diplomatic' && selection.level > 0) {
